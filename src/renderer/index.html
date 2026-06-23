@@ -9,16 +9,31 @@
     <div id="app">
       <header class="toolbar">
         <div class="toolbar-left">
-          <button id="open-button">Open</button>
-          <button id="save-button">Save</button>
-          <button id="analyze-button">Analyze</button>
+          <button id="select-directory-button">Select Folder</button>
+          <div class="directory-input">
+            <input
+              id="active-directory"
+              class="active-directory"
+              type="text"
+              placeholder="Type a folder path"
+            />
+            <div id="directory-error" class="directory-error"></div>
+          </div>
         </div>
         <div class="toolbar-right">
-          <span id="file-path" class="file-path">No file opened</span>
+          <span id="active-file" class="active-file">No file selected</span>
+          <button id="analyze-button" class="action-button">Analyze</button>
           <span id="status" class="status"></span>
         </div>
       </header>
       <div class="content">
+        <aside class="files-panel">
+          <div class="files-header">
+            <span>Files</span>
+            <span id="file-count" class="file-count"></span>
+          </div>
+          <div id="files-list" class="files-list"></div>
+        </aside>
         <div id="editor" class="editor"></div>
         <aside id="issues-panel" class="issues-panel">
           <div class="issues-header">Issues</div>
@@ -30,6 +45,25 @@
         <span class="legend-item"><span class="legend-swatch grammar"></span>Grammar</span>
         <span class="legend-item"><span class="legend-swatch llm"></span>LLM</span>
       </footer>
+    </div>
+    <div id="commit-modal" class="modal hidden" aria-hidden="true">
+      <div class="modal-backdrop"></div>
+      <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="commit-title">
+        <div class="modal-header">
+          <h2 id="commit-title">Commit changes</h2>
+        </div>
+        <div class="modal-body">
+          <label class="modal-label" for="commit-summary">Summary</label>
+          <input id="commit-summary" class="modal-input" type="text" placeholder="Short commit summary" />
+          <label class="modal-label" for="commit-details">Details (optional)</label>
+          <textarea id="commit-details" class="modal-textarea" rows="4" placeholder="More detail about this change"></textarea>
+          <div id="commit-error" class="modal-error"></div>
+        </div>
+        <div class="modal-actions">
+          <button id="commit-cancel" class="button-secondary" type="button">Cancel</button>
+          <button id="commit-confirm" class="button-primary" type="button">Commit</button>
+        </div>
+      </div>
     </div>
     <script type="module" src="./main.js"></script>
   </body>

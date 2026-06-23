@@ -2,17 +2,20 @@ import { app, BrowserWindow, dialog, ipcMain } from "electron";
 import path from "path";
 import { fileURLToPath } from "url";
 import fs from "fs/promises";
-import { spawn } from "child_process";
+import { execFile, spawn } from "child_process";
+import net from "net";
 import { resolveJavaCommand, resolveLanguageToolJar } from "./languagetool.js";
+import { promisify } from "util";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const execFileAsync = promisify(execFile);
 
 const debugPort = process.env.REMOTE_DEBUGGING_PORT ?? "9222";
 app.commandLine.appendSwitch("remote-debugging-port", debugPort);
 console.log(`Remote debugging enabled on port ${debugPort}`);
 
-const languageToolPort = process.env.LANGUAGETOOL_PORT ?? "8010";
+let languageToolPort = process.env.LANGUAGETOOL_PORT ?? "8010";
 let languageToolProcess = null;
 let languageToolError = null;
 let languageToolErrorShown = false;
@@ -58,6 +61,7 @@ async function startLanguageTool() {
   const bundledDir = path.join(process.resourcesPath, "languagetool");
 
   try {
+    languageToolPort = await findAvailablePort(languageToolPort);
     const jarPath = await resolveLanguageToolJar({ cacheDir, bundledDir });
     const javaCommand = await resolveJavaCommand();
     const args = ["-jar", jarPath, "--port", languageToolPort];
@@ -121,6 +125,26 @@ async function startLanguageTool() {
   }
 }
 
+function findAvailablePort(preferredPort) {
+  return new Promise((resolve) => {
+    const port = Number(preferredPort) || 8010;
+    const server = net.createServer();
+
+    server.once("error", () => {
+      server.close(() => {
+        resolve(findAvailablePort(port + 1));
+      });
+    });
+
+    server.listen(port, "127.0.0.1", () => {
+      const address = server.address();
+      server.close(() => {
+        resolve(String(address.port));
+      });
+    });
+  });
+}
+
 function createWindow() {
   const win = new BrowserWindow({
     width: 1200,
@@ -164,46 +188,133 @@ app.on("before-quit", () => {
   }
 });
 
-ipcMain.handle("open-file", async () => {
+ipcMain.handle("select-directory", async () => {
   const result = await dialog.showOpenDialog({
-    properties: ["openFile"],
-    filters: [
-      { name: "Markdown", extensions: ["md", "markdown"] },
-      { name: "All Files", extensions: ["*"] }
-    ]
+    properties: ["openDirectory"]
   });
 
   if (result.canceled || result.filePaths.length === 0) {
     return null;
   }
 
-  const filePath = result.filePaths[0];
+  return { path: result.filePaths[0] };
+});
+
+ipcMain.handle("get-home-directory", async () => {
+  return { path: app.getPath("home") };
+});
+
+ipcMain.handle("validate-directory", async (_event, directory) => {
+  if (!directory) {
+    return { ok: false, error: "Path is required." };
+  }
+  try {
+    const stats = await fs.stat(directory);
+    if (!stats.isDirectory()) {
+      return { ok: false, error: "Path is not a directory." };
+    }
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: "Directory not found." };
+  }
+});
+
+ipcMain.handle("list-markdown-files", async (_event, directory) => {
+  if (!directory) {
+    return { files: [] };
+  }
+
+  const rootDir = directory;
+  const ignoredDirs = new Set([".git", "node_modules", "dist", "resources", ".languagetool"]);
+  const files = [];
+
+  async function walk(currentDir) {
+    const entries = await fs.readdir(currentDir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.name.startsWith(".")) {
+        continue;
+      }
+      const fullPath = path.join(currentDir, entry.name);
+      if (entry.isDirectory()) {
+        if (ignoredDirs.has(entry.name)) {
+          continue;
+        }
+        await walk(fullPath);
+        continue;
+      }
+      if (!entry.isFile()) {
+        continue;
+      }
+      const ext = path.extname(entry.name).toLowerCase();
+      if (ext === ".md" || ext === ".markdown") {
+        files.push({
+          path: fullPath,
+          relativePath: path.relative(rootDir, fullPath)
+        });
+      }
+    }
+  }
+
+  await walk(rootDir);
+  files.sort((a, b) => a.relativePath.localeCompare(b.relativePath));
+  return { files };
+});
+
+ipcMain.handle("read-file", async (_event, filePath) => {
+  if (!filePath) {
+    return null;
+  }
+
   const content = await fs.readFile(filePath, "utf8");
   return { path: filePath, content };
 });
 
-ipcMain.handle("save-file", async (_event, payload) => {
-  const { path: existingPath, content } = payload ?? {};
-  let filePath = existingPath;
-
+ipcMain.handle("save-and-commit", async (_event, payload) => {
+  const { path: filePath, content, messageShort, messageLong } = payload ?? {};
   if (!filePath) {
-    const result = await dialog.showSaveDialog({
-      filters: [
-        { name: "Markdown", extensions: ["md", "markdown"] },
-        { name: "All Files", extensions: ["*"] }
-      ]
-    });
-
-    if (result.canceled || !result.filePath) {
-      return null;
-    }
-
-    filePath = result.filePath;
+    return { error: "No file selected." };
+  }
+  if (!messageShort || !messageShort.trim()) {
+    return { error: "Commit summary is required." };
   }
 
-  await fs.writeFile(filePath, content ?? "", "utf8");
-  return { path: filePath };
+  try {
+    const repoRoot = await resolveRepoRoot(path.dirname(filePath));
+    if (!repoRoot) {
+      return { error: "No git repository found for this file." };
+    }
+
+    await fs.writeFile(filePath, content ?? "", "utf8");
+    const relativePath = path.relative(repoRoot, filePath);
+    if (relativePath.startsWith("..")) {
+      return { error: "File is outside the git repository." };
+    }
+
+    await runGit(["add", relativePath], repoRoot);
+    const commitArgs = ["commit", "-m", messageShort.trim()];
+    if (messageLong && messageLong.trim()) {
+      commitArgs.push("-m", messageLong.trim());
+    }
+    await runGit(commitArgs, repoRoot);
+    return { path: filePath };
+  } catch (error) {
+    const detail = error?.stderr || error?.message || "Commit failed.";
+    return { error: detail };
+  }
 });
+
+async function resolveRepoRoot(startDir) {
+  try {
+    const result = await runGit(["rev-parse", "--show-toplevel"], startDir);
+    return result.stdout.trim();
+  } catch (error) {
+    return null;
+  }
+}
+
+async function runGit(args, cwd) {
+  return execFileAsync("git", args, { cwd });
+}
 
 ipcMain.handle("check-grammar", async (_event, text) => {
   const endpoint = `http://localhost:${languageToolPort}/v2/check`;

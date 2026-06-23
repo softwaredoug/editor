@@ -63,51 +63,87 @@ const issuesState = StateField.define({
   }
 });
 
-const issuesTooltip = hoverTooltip((view, pos) => {
-  const issues = view.state.field(issuesState);
-  const match = issues.find(
-    (issue) => pos >= issue.range.start && pos <= issue.range.end
-  );
-  if (!match) {
-    return null;
-  }
-
-  return {
-    pos: match.range.start,
-    end: match.range.end,
-    create() {
-      const container = document.createElement("div");
-      container.className = "cm-tooltip-issue";
-
-      const title = document.createElement("div");
-      title.className = "cm-tooltip-issue-title";
-      title.textContent = match.type?.toUpperCase() ?? "ISSUE";
-
-      const message = document.createElement("div");
-      message.className = "cm-tooltip-issue-message";
-      message.textContent = match.message ?? "";
-
-      const source = document.createElement("div");
-      source.className = "cm-tooltip-issue-source";
-      source.textContent = `Source: ${match.source ?? "unknown"}`;
-
-      container.appendChild(title);
-      container.appendChild(message);
-      container.appendChild(source);
-
-      if (match.suggestions?.length) {
-        const suggestion = document.createElement("div");
-        suggestion.className = "cm-tooltip-issue-suggestion";
-        suggestion.textContent = `Suggestion: ${match.suggestions[0]}`;
-        container.appendChild(suggestion);
-      }
-
-      return { dom: container };
+function createIssuesTooltip({ onApplyIssue, onDismissIssue } = {}) {
+  return hoverTooltip((view, pos) => {
+    const issues = view.state.field(issuesState);
+    const match = issues.find(
+      (issue) => pos >= issue.range.start && pos <= issue.range.end
+    );
+    if (!match) {
+      return null;
     }
-  };
-});
 
-export function createEditor({ parent, initialText, onChange }) {
+    return {
+      pos: match.range.start,
+      end: match.range.end,
+      create() {
+        const container = document.createElement("div");
+        container.className = "cm-tooltip-issue";
+
+        const title = document.createElement("div");
+        title.className = "cm-tooltip-issue-title";
+        title.textContent = match.type?.toUpperCase() ?? "ISSUE";
+
+        const message = document.createElement("div");
+        message.className = "cm-tooltip-issue-message";
+        message.textContent = match.message ?? "";
+
+        const source = document.createElement("div");
+        source.className = "cm-tooltip-issue-source";
+        source.textContent = `Source: ${match.source ?? "unknown"}`;
+
+        container.appendChild(title);
+        container.appendChild(message);
+        container.appendChild(source);
+
+        if (match.suggestions?.length) {
+          const suggestion = document.createElement("div");
+          suggestion.className = "cm-tooltip-issue-suggestion";
+          suggestion.textContent = `Suggestion: ${match.suggestions[0]}`;
+          container.appendChild(suggestion);
+        }
+
+        if (onApplyIssue || onDismissIssue) {
+          const actions = document.createElement("div");
+          actions.className = "cm-tooltip-issue-actions";
+
+          if (onApplyIssue) {
+            const applyButton = document.createElement("button");
+            applyButton.type = "button";
+            applyButton.className = "cm-tooltip-issue-action";
+            applyButton.textContent = "Apply";
+            applyButton.disabled = !(match.suggestions && match.suggestions.length);
+            applyButton.addEventListener("click", (event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              onApplyIssue(match);
+            });
+            actions.appendChild(applyButton);
+          }
+
+          if (onDismissIssue) {
+            const dismissButton = document.createElement("button");
+            dismissButton.type = "button";
+            dismissButton.className = "cm-tooltip-issue-action";
+            dismissButton.textContent = "Dismiss";
+            dismissButton.addEventListener("click", (event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              onDismissIssue(match);
+            });
+            actions.appendChild(dismissButton);
+          }
+
+          container.appendChild(actions);
+        }
+
+        return { dom: container };
+      }
+    };
+  });
+}
+
+export function createEditor({ parent, initialText, onChange, onApplyIssue, onDismissIssue }) {
   const state = EditorState.create({
     doc: initialText,
     extensions: [
@@ -117,7 +153,7 @@ export function createEditor({ parent, initialText, onChange }) {
       EditorView.lineWrapping,
       issuesField,
       issuesState,
-      issuesTooltip,
+      createIssuesTooltip({ onApplyIssue, onDismissIssue }),
       EditorView.updateListener.of((update) => {
         if (update.docChanged) {
           onChange(update.state.doc.toString());

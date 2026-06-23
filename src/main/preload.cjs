@@ -1,8 +1,12 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("api", {
-  openFile: () => ipcRenderer.invoke("open-file"),
-  saveFile: (payload) => ipcRenderer.invoke("save-file", payload),
+  selectDirectory: () => ipcRenderer.invoke("select-directory"),
+  getHomeDirectory: () => ipcRenderer.invoke("get-home-directory"),
+  validateDirectory: (directory) => ipcRenderer.invoke("validate-directory", directory),
+  listMarkdownFiles: (directory) => ipcRenderer.invoke("list-markdown-files", directory),
+  readFile: (filePath) => ipcRenderer.invoke("read-file", filePath),
+  saveAndCommit: (payload) => ipcRenderer.invoke("save-and-commit", payload),
   checkGrammar: (text) => ipcRenderer.invoke("check-grammar", text),
   analyzeWithLlm: (text) => ipcRenderer.invoke("analyze-llm", text)
 });
