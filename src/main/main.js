@@ -346,6 +346,20 @@ ipcMain.handle("rename-file", async (_event, payload) => {
     }
     try {
       await runGit(["mv", relativeOld, relativeNew], repoRoot);
+    } catch (error) {
+      const message = error?.stderr || error?.message || "";
+      if (!message.includes("not under version control")) {
+        return { error: message || "Rename failed." };
+      }
+      try {
+        await fs.rename(oldPath, newPath);
+        await runGit(["add", "-A", relativeOld, relativeNew], repoRoot);
+      } catch (renameError) {
+        return { error: renameError?.message || "Rename failed." };
+      }
+    }
+
+    try {
       const commitArgs = ["commit", "-m", messageShort.trim()];
       if (messageLong && messageLong.trim()) {
         commitArgs.push("-m", messageLong.trim());
@@ -353,7 +367,7 @@ ipcMain.handle("rename-file", async (_event, payload) => {
       await runGit(commitArgs, repoRoot);
       return { path: newPath };
     } catch (error) {
-      return { error: error?.stderr || error?.message || "Rename failed." };
+      return { error: error?.stderr || error?.message || "Commit failed." };
     }
   }
 

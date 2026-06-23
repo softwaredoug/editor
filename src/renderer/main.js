@@ -703,8 +703,9 @@ renameDeleteButton.addEventListener("click", async () => {
     setRenameError("No file selected.");
     return;
   }
+  const targetPath = renameTargetPath;
   closeRenameModal();
-  openDeleteModal(renameTargetPath);
+  openDeleteModal(targetPath);
 });
 
 renameInput.addEventListener("input", () => {
