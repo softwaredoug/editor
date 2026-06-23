@@ -62,13 +62,15 @@ let renameSummaryAuto = false;
 let deleteTargetPath = null;
 let deleteRequiresCommit = false;
 let deleteSummaryAuto = false;
+let spellingExceptions = new Set();
 
 const editor = createEditor({
   parent: document.getElementById("editor"),
   initialText: "",
   onChange: handleEditorChange,
   onApplyIssue: applyIssue,
-  onDismissIssue: dismissIssue
+  onDismissIssue: dismissIssue,
+  onIgnoreIssue: ignoreIssue
 });
 
 initializeDirectory();
@@ -114,6 +116,72 @@ function extractFrontmatter(text) {
 
   const offset = match[0].length;
   return { body: text.slice(offset), offset };
+}
+
+function maskCodeBlocks(text) {
+  if (!text) {
+    return "";
+  }
+
+  const lines = text.split(/\r?\n/);
+  const separators = text.match(/\r?\n/g) ?? [];
+  const output = [];
+  let inBlock = false;
+  let fence = "";
+
+  lines.forEach((line, index) => {
+    const trimmed = line.trimStart();
+    const isFence = trimmed.startsWith("```") || trimmed.startsWith("~~~");
+    if (isFence) {
+      if (!inBlock) {
+        inBlock = true;
+        fence = trimmed.slice(0, 3);
+      } else if (trimmed.startsWith(fence)) {
+        inBlock = false;
+        fence = "";
+      }
+      output.push(" ".repeat(line.length));
+    } else if (inBlock) {
+      output.push(" ".repeat(line.length));
+    } else {
+      output.push(line);
+    }
+
+    if (separators[index]) {
+      output.push(separators[index]);
+    }
+  });
+
+  return output.join("");
+}
+
+function maskLinks(text) {
+  if (!text) {
+    return "";
+  }
+
+  const chars = Array.from(text);
+  const linkPattern = /!?\[[^\]]*\]\(([^)]*)\)/g;
+  let match = null;
+
+  while ((match = linkPattern.exec(text)) !== null) {
+    const fullMatch = match[0];
+    const matchIndex = match.index;
+    const openParenIndex = fullMatch.lastIndexOf("(");
+    const closeParenIndex = fullMatch.lastIndexOf(")");
+    if (openParenIndex === -1 || closeParenIndex === -1) {
+      continue;
+    }
+    const start = matchIndex + openParenIndex + 1;
+    const end = matchIndex + closeParenIndex;
+    for (let i = start; i < end; i += 1) {
+      if (chars[i] !== "\n" && chars[i] !== "\r") {
+        chars[i] = " ";
+      }
+    }
+  }
+
+  return chars.join("");
 }
 
 function offsetIssues(issues, offset) {
@@ -170,10 +238,23 @@ function scheduleChecks() {
   debounceHandle = setTimeout(async () => {
     const text = editor.getText();
     const { body, offset } = extractFrontmatter(text);
-    issuesByType.spell = offsetIssues(checkSpelling(body), offset);
+    const maskedBody = maskLinks(maskCodeBlocks(body));
+    const rawSpellingIssues = checkSpelling(maskedBody);
+    const filteredSpellingIssues = rawSpellingIssues.filter((issue) => {
+      const word = issue.word?.toLowerCase();
+      return !word || !spellingExceptions.has(word);
+    });
+    issuesByType.spell = offsetIssues(filteredSpellingIssues, offset);
 
-    const grammarResult = await checkGrammar(body);
-    issuesByType.grammar = offsetIssues(grammarResult.issues, offset);
+    const grammarResult = await checkGrammar(maskedBody);
+    const rawGrammarIssues = offsetIssues(grammarResult.issues, offset);
+    issuesByType.grammar = rawGrammarIssues.filter((issue) => {
+      if (issue.type !== "spell") {
+        return true;
+      }
+      const word = issue.word?.toLowerCase();
+      return !word || !spellingExceptions.has(word);
+    });
     if (grammarResult.error) {
       setStatus(grammarResult.error);
     } else {
@@ -226,6 +307,17 @@ function renderIssues(issues) {
     const rejectButton = document.createElement("button");
     rejectButton.textContent = "Dismiss";
     rejectButton.addEventListener("click", () => dismissIssue(issue));
+
+    const ignoreButton = document.createElement("button");
+    ignoreButton.textContent = "Always Ignore";
+    const canIgnore = issue.type === "spell" && issue.word;
+    ignoreButton.disabled = !canIgnore;
+    if (!canIgnore) {
+      ignoreButton.title = "Available for spelling only";
+    } else {
+      ignoreButton.addEventListener("click", () => ignoreIssue(issue));
+    }
+    actions.appendChild(ignoreButton);
 
     actions.appendChild(acceptButton);
     actions.appendChild(rejectButton);
@@ -284,11 +376,13 @@ async function refreshFileList() {
     filesInDirectory = [];
     renderFileList();
     setRepoStatus(null);
+    spellingExceptions = new Set();
     return;
   }
   const result = await window.api.listMarkdownFiles(activeDirectory);
   filesInDirectory = result?.files ?? [];
   renderFileList();
+  await refreshSpellingExceptions();
   await refreshRepoStatus();
 }
 
@@ -308,6 +402,16 @@ async function initializeDirectory() {
     setActiveDirectory(result.path);
     await refreshFileList();
   }
+}
+
+async function refreshSpellingExceptions() {
+  if (!activeDirectory) {
+    spellingExceptions = new Set();
+    return;
+  }
+  const result = await window.api.readSpellingExceptions(activeDirectory);
+  const words = (result?.words ?? []).map((word) => word.toLowerCase());
+  spellingExceptions = new Set(words);
 }
 
 async function applyDirectoryInput() {
@@ -357,6 +461,27 @@ function dismissIssue(issue) {
   refreshIssues();
 }
 
+async function ignoreIssue(issue) {
+  if (!activeDirectory) {
+    setStatus("Select a folder to manage spelling exceptions.");
+    return;
+  }
+  const word = issue.word?.trim();
+  if (!word) {
+    return;
+  }
+  const result = await window.api.addSpellingException({
+    directory: activeDirectory,
+    word
+  });
+  if (result?.error) {
+    setStatus(result.error);
+    return;
+  }
+  await refreshSpellingExceptions();
+  scheduleChecks();
+}
+
 selectDirectoryButton.addEventListener("click", async () => {
   const result = await window.api.selectDirectory();
   if (!result?.path) {
@@ -397,7 +522,8 @@ analyzeButton.addEventListener("click", async () => {
   setStatus("Analyzing...");
   const text = editor.getText();
   const { body, offset } = extractFrontmatter(text);
-  const result = await analyzeWithLlm(body);
+  const maskedBody = maskLinks(maskCodeBlocks(body));
+  const result = await analyzeWithLlm(maskedBody);
   issuesByType.llm = offsetIssues(result.issues, offset);
 
   if (result.error) {

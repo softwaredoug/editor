@@ -9,6 +9,8 @@ contextBridge.exposeInMainWorld("api", {
   createNewFile: (directory) => ipcRenderer.invoke("create-new-file", directory),
   renameFile: (payload) => ipcRenderer.invoke("rename-file", payload),
   deleteFile: (payload) => ipcRenderer.invoke("delete-file", payload),
+  readSpellingExceptions: (directory) => ipcRenderer.invoke("read-spelling-exceptions", directory),
+  addSpellingException: (payload) => ipcRenderer.invoke("add-spelling-exception", payload),
   saveAndCommit: (payload) => ipcRenderer.invoke("save-and-commit", payload),
   getGitSyncStatus: (directory) => ipcRenderer.invoke("get-git-sync-status", directory),
   syncWithOrigin: (directory) => ipcRenderer.invoke("sync-with-origin", directory),

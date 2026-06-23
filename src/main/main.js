@@ -416,6 +416,55 @@ ipcMain.handle("delete-file", async (_event, payload) => {
   }
 });
 
+ipcMain.handle("read-spelling-exceptions", async (_event, directory) => {
+  if (!directory) {
+    return { words: [] };
+  }
+  const filePath = path.join(directory, ".spelling-exceptions");
+  try {
+    const content = await fs.readFile(filePath, "utf8");
+    const words = content
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+    return { words };
+  } catch (error) {
+    return { words: [] };
+  }
+});
+
+ipcMain.handle("add-spelling-exception", async (_event, payload) => {
+  const { directory, word } = payload ?? {};
+  if (!directory) {
+    return { error: "No directory selected." };
+  }
+  if (!word || !word.trim()) {
+    return { error: "No word provided." };
+  }
+
+  const filePath = path.join(directory, ".spelling-exceptions");
+  let words = [];
+  try {
+    const content = await fs.readFile(filePath, "utf8");
+    words = content
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+  } catch (error) {
+    words = [];
+  }
+
+  const normalized = word.trim();
+  const normalizedLower = normalized.toLowerCase();
+  const existing = new Set(words.map((entry) => entry.toLowerCase()));
+  if (!existing.has(normalizedLower)) {
+    words.push(normalized);
+    await fs.writeFile(filePath, `${words.join("\n")}\n`, "utf8");
+  }
+
+  return { words };
+});
+
 ipcMain.handle("save-and-commit", async (_event, payload) => {
   const { path: filePath, content, messageShort, messageLong } = payload ?? {};
   if (!filePath) {
@@ -604,9 +653,12 @@ ipcMain.handle("check-grammar", async (_event, text) => {
       const start = match.offset ?? 0;
       const length = match.length ?? 0;
       const suggestions = (match.replacements ?? []).map((rep) => rep.value);
+      const isSpelling = match.rule?.issueType === "misspelling";
+      const word = isSpelling ? (text ?? "").slice(start, start + length) : undefined;
       return {
         id: `grammar-${index}-${start}`,
-        type: "grammar",
+        type: isSpelling ? "spell" : "grammar",
+        word,
         range: { start, end: start + length },
         message: match.message ?? "Grammar issue",
         suggestions,

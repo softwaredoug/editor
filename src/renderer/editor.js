@@ -63,7 +63,7 @@ const issuesState = StateField.define({
   }
 });
 
-function createIssuesTooltip({ onApplyIssue, onDismissIssue } = {}) {
+function createIssuesTooltip({ onApplyIssue, onDismissIssue, onIgnoreIssue } = {}) {
   return hoverTooltip((view, pos) => {
     const issues = view.state.field(issuesState);
     const match = issues.find(
@@ -103,7 +103,7 @@ function createIssuesTooltip({ onApplyIssue, onDismissIssue } = {}) {
           container.appendChild(suggestion);
         }
 
-        if (onApplyIssue || onDismissIssue) {
+        if (onApplyIssue || onDismissIssue || onIgnoreIssue) {
           const actions = document.createElement("div");
           actions.className = "cm-tooltip-issue-actions";
 
@@ -134,6 +134,25 @@ function createIssuesTooltip({ onApplyIssue, onDismissIssue } = {}) {
             actions.appendChild(dismissButton);
           }
 
+          if (onIgnoreIssue) {
+            const ignoreButton = document.createElement("button");
+            ignoreButton.type = "button";
+            ignoreButton.className = "cm-tooltip-issue-action";
+            ignoreButton.textContent = "Always Ignore";
+            const canIgnore = match.type === "spell" && match.word;
+            ignoreButton.disabled = !canIgnore;
+            if (!canIgnore) {
+              ignoreButton.title = "Available for spelling only";
+            } else {
+              ignoreButton.addEventListener("click", (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                onIgnoreIssue(match);
+              });
+            }
+            actions.appendChild(ignoreButton);
+          }
+
           container.appendChild(actions);
         }
 
@@ -143,7 +162,7 @@ function createIssuesTooltip({ onApplyIssue, onDismissIssue } = {}) {
   });
 }
 
-export function createEditor({ parent, initialText, onChange, onApplyIssue, onDismissIssue }) {
+export function createEditor({ parent, initialText, onChange, onApplyIssue, onDismissIssue, onIgnoreIssue }) {
   const state = EditorState.create({
     doc: initialText,
     extensions: [
@@ -153,7 +172,7 @@ export function createEditor({ parent, initialText, onChange, onApplyIssue, onDi
       EditorView.lineWrapping,
       issuesField,
       issuesState,
-      createIssuesTooltip({ onApplyIssue, onDismissIssue }),
+      createIssuesTooltip({ onApplyIssue, onDismissIssue, onIgnoreIssue }),
       EditorView.updateListener.of((update) => {
         if (update.docChanged) {
           onChange(update.state.doc.toString());

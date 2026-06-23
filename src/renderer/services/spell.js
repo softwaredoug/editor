@@ -20,6 +20,7 @@ export function checkSpelling(text) {
       issues.push({
         id: `spell-${index}-${found}`,
         type: "spell",
+        word: entry.word,
         range: { start: found, end },
         message: `Possible misspelling: ${entry.word}`,
         suggestions: [entry.suggestion],
