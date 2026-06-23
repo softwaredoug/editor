@@ -37,6 +37,14 @@ const renameCancelButton = document.getElementById("rename-cancel");
 const renameDeleteButton = document.getElementById("rename-delete");
 const renameConfirmButton = document.getElementById("rename-confirm");
 const renameErrorLabel = document.getElementById("rename-error");
+const deleteModal = document.getElementById("delete-modal");
+const deleteFileName = document.getElementById("delete-file-name");
+const deleteGitFields = document.getElementById("delete-git-fields");
+const deleteSummaryInput = document.getElementById("delete-summary");
+const deleteDetailsInput = document.getElementById("delete-details");
+const deleteCancelButton = document.getElementById("delete-cancel");
+const deleteConfirmButton = document.getElementById("delete-confirm");
+const deleteErrorLabel = document.getElementById("delete-error");
 
 let filePath = null;
 let activeDirectory = null;
@@ -51,8 +59,9 @@ let repoStatus = null;
 let renameTargetPath = null;
 let renameRequiresCommit = false;
 let renameSummaryAuto = false;
+let deleteTargetPath = null;
+let deleteRequiresCommit = false;
 let deleteSummaryAuto = false;
-let renameMode = "rename";
 
 const editor = createEditor({
   parent: document.getElementById("editor"),
@@ -482,6 +491,12 @@ renameModal.addEventListener("click", (event) => {
   }
 });
 
+deleteModal.addEventListener("click", (event) => {
+  if (event.target.classList.contains("modal-backdrop")) {
+    closeDeleteModal();
+  }
+});
+
 function openCommitModal() {
   commitModal.classList.remove("hidden");
   commitModal.setAttribute("aria-hidden", "false");
@@ -499,7 +514,6 @@ function closeCommitModal() {
 
 function openRenameModal(path) {
   renameTargetPath = path;
-  renameMode = "rename";
   renameRequiresCommit = Boolean(repoStatus?.available);
   renameGitFields.classList.toggle("hidden", !renameRequiresCommit);
   renameModal.classList.remove("hidden");
@@ -509,7 +523,6 @@ function openRenameModal(path) {
     ? buildRenameSummary(path, renameInput.value)
     : "";
   renameSummaryAuto = renameRequiresCommit;
-  deleteSummaryAuto = renameRequiresCommit;
   renameDetailsInput.value = "";
   setRenameError("");
   renameInput.focus();
@@ -522,8 +535,6 @@ function closeRenameModal() {
   renameTargetPath = null;
   renameRequiresCommit = false;
   renameSummaryAuto = false;
-  deleteSummaryAuto = false;
-  renameMode = "rename";
   setRenameError("");
 }
 
@@ -561,6 +572,37 @@ function closeRepoModal() {
   repoModal.classList.add("hidden");
   repoModal.setAttribute("aria-hidden", "true");
   repoStatusError.textContent = "";
+}
+
+function openDeleteModal(path) {
+  deleteTargetPath = path;
+  deleteRequiresCommit = Boolean(repoStatus?.available);
+  deleteGitFields.classList.toggle("hidden", !deleteRequiresCommit);
+  deleteModal.classList.remove("hidden");
+  deleteModal.setAttribute("aria-hidden", "false");
+  deleteFileName.textContent = path ? `Delete ${path.split("/").pop()}` : "Delete file";
+  deleteSummaryInput.value = deleteRequiresCommit ? buildDeleteSummary(path) : "";
+  deleteDetailsInput.value = "";
+  deleteSummaryAuto = deleteRequiresCommit;
+  setDeleteError("");
+  if (deleteRequiresCommit) {
+    deleteSummaryInput.focus();
+  } else {
+    deleteConfirmButton.focus();
+  }
+}
+
+function closeDeleteModal() {
+  deleteModal.classList.add("hidden");
+  deleteModal.setAttribute("aria-hidden", "true");
+  deleteTargetPath = null;
+  deleteRequiresCommit = false;
+  deleteSummaryAuto = false;
+  setDeleteError("");
+}
+
+function setDeleteError(message) {
+  deleteErrorLabel.textContent = message ?? "";
 }
 
 function renderRepoStatusDetails() {
@@ -612,11 +654,13 @@ window.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && !renameModal.classList.contains("hidden")) {
     closeRenameModal();
   }
+  if (event.key === "Escape" && !deleteModal.classList.contains("hidden")) {
+    closeDeleteModal();
+  }
 });
 
 renameCancelButton.addEventListener("click", () => closeRenameModal());
 renameConfirmButton.addEventListener("click", async () => {
-  renameMode = "rename";
   if (!renameTargetPath) {
     setRenameError("No file selected.");
     return;
@@ -659,37 +703,8 @@ renameDeleteButton.addEventListener("click", async () => {
     setRenameError("No file selected.");
     return;
   }
-  if (!window.confirm("Delete this file?")) {
-    return;
-  }
-  renameMode = "delete";
-  if (renameRequiresCommit && deleteSummaryAuto) {
-    renameSummaryInput.value = buildDeleteSummary(renameTargetPath);
-  }
-  const summary = renameSummaryInput.value.trim();
-  const details = renameDetailsInput.value.trim();
-  if (renameRequiresCommit && !summary) {
-    setRenameError("Commit summary is required.");
-    return;
-  }
-
-  setRenameError("");
-  const result = await window.api.deleteFile({
-    filePath: renameTargetPath,
-    messageShort: summary,
-    messageLong: details
-  });
-
-  if (result?.error) {
-    setRenameError(result.error);
-    return;
-  }
-
   closeRenameModal();
-  setFilePath(null);
-  editor.setText("");
-  await refreshFileList();
-  await refreshRepoStatus();
+  openDeleteModal(renameTargetPath);
 });
 
 renameInput.addEventListener("input", () => {
@@ -707,6 +722,47 @@ renameSummaryInput.addEventListener("input", () => {
     return;
   }
   renameSummaryAuto = false;
+});
+
+deleteCancelButton.addEventListener("click", () => closeDeleteModal());
+deleteConfirmButton.addEventListener("click", async () => {
+  if (!deleteTargetPath) {
+    setDeleteError("No file selected.");
+    return;
+  }
+  if (!window.confirm("Delete this file?")) {
+    return;
+  }
+  const summary = deleteSummaryInput.value.trim();
+  const details = deleteDetailsInput.value.trim();
+  if (deleteRequiresCommit && !summary) {
+    setDeleteError("Commit summary is required.");
+    return;
+  }
+
+  setDeleteError("");
+  const result = await window.api.deleteFile({
+    filePath: deleteTargetPath,
+    messageShort: summary,
+    messageLong: details
+  });
+
+  if (result?.error) {
+    setDeleteError(result.error);
+    return;
+  }
+
+  closeDeleteModal();
+  setFilePath(null);
+  editor.setText("");
+  await refreshFileList();
+  await refreshRepoStatus();
+});
+
+deleteSummaryInput.addEventListener("input", () => {
+  if (!deleteRequiresCommit) {
+    return;
+  }
   deleteSummaryAuto = false;
 });
 
