@@ -169,6 +169,11 @@ export function createEditor({ parent, initialText, onChange, onApplyIssue, onDi
       markdown(),
       history(),
       keymap.of([...historyKeymap]),
+      EditorView.contentAttributes.of({
+        spellcheck: "false",
+        autocorrect: "off",
+        autocapitalize: "off"
+      }),
       EditorView.lineWrapping,
       issuesField,
       issuesState,
@@ -193,6 +198,15 @@ export function createEditor({ parent, initialText, onChange, onApplyIssue, onDi
       view.dispatch({
         changes: { from: 0, to: view.state.doc.length, insert: text ?? "" }
       });
+    },
+    scrollTo: (from, to) => {
+      const start = Math.max(0, from ?? 0);
+      const end = Math.max(start, to ?? start);
+      view.dispatch({
+        selection: { anchor: start, head: end },
+        scrollIntoView: true
+      });
+      view.focus();
     },
     replaceRange: (from, to, insert) => {
       view.dispatch({

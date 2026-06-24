@@ -1,16 +1,14 @@
 import { app, BrowserWindow, dialog, ipcMain } from "electron";
 import path from "path";
 import { fileURLToPath } from "url";
+import { spawn } from "child_process";
 import fs from "fs/promises";
-import { execFile, spawn } from "child_process";
 import net from "net";
 import { resolveJavaCommand, resolveLanguageToolJar } from "./languagetool.js";
-import { promisify } from "util";
+import * as fileOps from "./file-ops.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const execFileAsync = promisify(execFile);
-
 const debugPort = process.env.REMOTE_DEBUGGING_PORT ?? "9222";
 app.commandLine.appendSwitch("remote-debugging-port", debugPort);
 console.log(`Remote debugging enabled on port ${debugPort}`);
@@ -219,340 +217,37 @@ ipcMain.handle("validate-directory", async (_event, directory) => {
   }
 });
 
-ipcMain.handle("list-markdown-files", async (_event, directory) => {
-  if (!directory) {
-    return { files: [] };
-  }
+ipcMain.handle("list-markdown-files", async (_event, directory) =>
+  fileOps.listMarkdownFiles(directory)
+);
 
-  const rootDir = directory;
-  const ignoredDirs = new Set([".git", "node_modules", "dist", "resources", ".languagetool"]);
-  const files = [];
+ipcMain.handle("read-file", async (_event, filePath) => fileOps.readFile(filePath));
 
-  async function walk(currentDir) {
-    const entries = await fs.readdir(currentDir, { withFileTypes: true });
-    for (const entry of entries) {
-      if (entry.name.startsWith(".")) {
-        continue;
-      }
-      const fullPath = path.join(currentDir, entry.name);
-      if (entry.isDirectory()) {
-        if (ignoredDirs.has(entry.name)) {
-          continue;
-        }
-        await walk(fullPath);
-        continue;
-      }
-      if (!entry.isFile()) {
-        continue;
-      }
-      const ext = path.extname(entry.name).toLowerCase();
-      if (ext === ".md" || ext === ".markdown") {
-        files.push({
-          path: fullPath,
-          relativePath: path.relative(rootDir, fullPath)
-        });
-      }
-    }
-  }
+ipcMain.handle("create-new-file", async (_event, directory) =>
+  fileOps.createNewFile(directory)
+);
 
-  await walk(rootDir);
-  files.sort((a, b) => a.relativePath.localeCompare(b.relativePath));
-  return { files };
-});
+ipcMain.handle("rename-file", async (_event, payload) => fileOps.renameFile(payload));
 
-ipcMain.handle("read-file", async (_event, filePath) => {
-  if (!filePath) {
-    return null;
-  }
+ipcMain.handle("delete-file", async (_event, payload) => fileOps.deleteFile(payload));
 
-  const content = await fs.readFile(filePath, "utf8");
-  return { path: filePath, content };
-});
+ipcMain.handle("read-spelling-exceptions", async (_event, directory) =>
+  fileOps.readSpellingExceptions(directory)
+);
 
-ipcMain.handle("create-new-file", async (_event, directory) => {
-  if (!directory) {
-    return { error: "No directory selected." };
-  }
+ipcMain.handle("add-spelling-exception", async (_event, payload) =>
+  fileOps.addSpellingException(payload)
+);
 
-  const baseName = formatNewFileName(new Date());
-  let fileName = `${baseName}.md`;
-  let filePath = path.join(directory, fileName);
-  let counter = 1;
+ipcMain.handle("save-and-commit", async (_event, payload) => fileOps.saveAndCommit(payload));
 
-  while (true) {
-    try {
-      await fs.access(filePath);
-      fileName = `${baseName}-(${counter}).md`;
-      filePath = path.join(directory, fileName);
-      counter += 1;
-    } catch (error) {
-      break;
-    }
-  }
+ipcMain.handle("get-git-sync-status", async (_event, directory) =>
+  fileOps.getGitStatus(directory, { fetch: true })
+);
 
-  const frontmatter = [
-    "---",
-    "layout: post",
-    "title: \"New blog article\"",
-    "description: \"A new blog by Doug\"",
-    "category: blog",
-    "draft: true",
-    "---",
-    ""
-  ].join("\n");
-
-  await fs.writeFile(filePath, frontmatter, "utf8");
-  const repoRoot = await resolveRepoRoot(directory);
-  if (repoRoot) {
-    const relativePath = path.relative(repoRoot, filePath);
-    if (!relativePath.startsWith("..")) {
-      await runGit(["add", relativePath], repoRoot);
-    }
-  }
-  return { path: filePath, content: frontmatter };
-});
-
-ipcMain.handle("rename-file", async (_event, payload) => {
-  const { oldPath, newName, messageShort, messageLong } = payload ?? {};
-  if (!oldPath) {
-    return { error: "No file selected." };
-  }
-  if (!newName || !newName.trim()) {
-    return { error: "New filename is required." };
-  }
-  if (newName.includes("/") || newName.includes("\\")) {
-    return { error: "Filename must not include path separators." };
-  }
-
-  const directory = path.dirname(oldPath);
-  const newPath = path.join(directory, newName.trim());
-
-  try {
-    await fs.access(newPath);
-    return { error: "A file with that name already exists." };
-  } catch (error) {
-    // continue
-  }
-
-  const repoRoot = await resolveRepoRoot(directory);
-  if (repoRoot) {
-    if (!messageShort || !messageShort.trim()) {
-      return { error: "Commit summary is required." };
-    }
-    const relativeOld = path.relative(repoRoot, oldPath);
-    const relativeNew = path.relative(repoRoot, newPath);
-    if (relativeOld.startsWith("..") || relativeNew.startsWith("..")) {
-      return { error: "File is outside the git repository." };
-    }
-    try {
-      await runGit(["mv", relativeOld, relativeNew], repoRoot);
-    } catch (error) {
-      const message = error?.stderr || error?.message || "";
-      if (!message.includes("not under version control")) {
-        return { error: message || "Rename failed." };
-      }
-      try {
-        await fs.rename(oldPath, newPath);
-        await runGit(["add", "-A", relativeOld, relativeNew], repoRoot);
-      } catch (renameError) {
-        return { error: renameError?.message || "Rename failed." };
-      }
-    }
-
-    try {
-      const commitArgs = ["commit", "-m", messageShort.trim()];
-      if (messageLong && messageLong.trim()) {
-        commitArgs.push("-m", messageLong.trim());
-      }
-      await runGit(commitArgs, repoRoot);
-      return { path: newPath };
-    } catch (error) {
-      return { error: error?.stderr || error?.message || "Commit failed." };
-    }
-  }
-
-  try {
-    await fs.rename(oldPath, newPath);
-    return { path: newPath };
-  } catch (error) {
-    return { error: error?.message || "Rename failed." };
-  }
-});
-
-ipcMain.handle("delete-file", async (_event, payload) => {
-  const { filePath, messageShort, messageLong } = payload ?? {};
-  if (!filePath) {
-    return { error: "No file selected." };
-  }
-
-  const directory = path.dirname(filePath);
-  const repoRoot = await resolveRepoRoot(directory);
-  if (repoRoot) {
-    if (!messageShort || !messageShort.trim()) {
-      return { error: "Commit summary is required." };
-    }
-    const relativePath = path.relative(repoRoot, filePath);
-    if (relativePath.startsWith("..")) {
-      return { error: "File is outside the git repository." };
-    }
-    try {
-      await runGit(["rm", relativePath], repoRoot);
-      const commitArgs = ["commit", "-m", messageShort.trim()];
-      if (messageLong && messageLong.trim()) {
-        commitArgs.push("-m", messageLong.trim());
-      }
-      await runGit(commitArgs, repoRoot);
-      return { path: null };
-    } catch (error) {
-      return { error: error?.stderr || error?.message || "Delete failed." };
-    }
-  }
-
-  try {
-    await fs.unlink(filePath);
-    return { path: null };
-  } catch (error) {
-    return { error: error?.message || "Delete failed." };
-  }
-});
-
-ipcMain.handle("read-spelling-exceptions", async (_event, directory) => {
-  if (!directory) {
-    return { words: [] };
-  }
-  const filePath = path.join(directory, ".spelling-exceptions");
-  try {
-    const content = await fs.readFile(filePath, "utf8");
-    const words = content
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter(Boolean);
-    return { words };
-  } catch (error) {
-    return { words: [] };
-  }
-});
-
-ipcMain.handle("add-spelling-exception", async (_event, payload) => {
-  const { directory, word } = payload ?? {};
-  if (!directory) {
-    return { error: "No directory selected." };
-  }
-  if (!word || !word.trim()) {
-    return { error: "No word provided." };
-  }
-
-  const filePath = path.join(directory, ".spelling-exceptions");
-  let words = [];
-  try {
-    const content = await fs.readFile(filePath, "utf8");
-    words = content
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter(Boolean);
-  } catch (error) {
-    words = [];
-  }
-
-  const normalized = word.trim();
-  const normalizedLower = normalized.toLowerCase();
-  const existing = new Set(words.map((entry) => entry.toLowerCase()));
-  if (!existing.has(normalizedLower)) {
-    words.push(normalized);
-    await fs.writeFile(filePath, `${words.join("\n")}\n`, "utf8");
-  }
-
-  return { words };
-});
-
-ipcMain.handle("save-and-commit", async (_event, payload) => {
-  const { path: filePath, content, messageShort, messageLong } = payload ?? {};
-  if (!filePath) {
-    return { error: "No file selected." };
-  }
-  if (!messageShort || !messageShort.trim()) {
-    return { error: "Commit summary is required." };
-  }
-
-  try {
-    const repoRoot = await resolveRepoRoot(path.dirname(filePath));
-    if (!repoRoot) {
-      return { error: "No git repository found for this file." };
-    }
-
-    await fs.writeFile(filePath, content ?? "", "utf8");
-    const relativePath = path.relative(repoRoot, filePath);
-    if (relativePath.startsWith("..")) {
-      return { error: "File is outside the git repository." };
-    }
-
-    await runGit(["add", relativePath], repoRoot);
-    const commitArgs = ["commit", "-m", messageShort.trim()];
-    if (messageLong && messageLong.trim()) {
-      commitArgs.push("-m", messageLong.trim());
-    }
-    await runGit(commitArgs, repoRoot);
-    return { path: filePath };
-  } catch (error) {
-    const detail = error?.stderr || error?.message || "Commit failed.";
-    return { error: detail };
-  }
-});
-
-ipcMain.handle("get-git-sync-status", async (_event, directory) => {
-  if (!directory) {
-    return { available: false };
-  }
-
-  return getGitStatus(directory, { fetch: true });
-});
-
-ipcMain.handle("sync-with-origin", async (_event, directory) => {
-  if (!directory) {
-    return { error: "No directory selected." };
-  }
-
-  const status = await getGitStatus(directory, { fetch: true });
-  if (!status.available) {
-    return { error: "No git repository found." };
-  }
-  if (!status.upstream) {
-    return { error: "No upstream configured for this branch." };
-  }
-
-  try {
-    if (status.behind > 0) {
-      await runGit(["pull", "--rebase"], status.repoRoot);
-    }
-    if (status.ahead > 0) {
-      await runGit(["push"], status.repoRoot);
-    }
-    return getGitStatus(status.repoRoot, { fetch: true });
-  } catch (error) {
-    return { error: error?.stderr || error?.message || "Sync failed." };
-  }
-});
-
-async function resolveRepoRoot(startDir) {
-  try {
-    const result = await runGit(["rev-parse", "--show-toplevel"], startDir);
-    return result.stdout.trim();
-  } catch (error) {
-    return null;
-  }
-}
-
-async function runGit(args, cwd) {
-  return execFileAsync("git", args, { cwd });
-}
-
-function formatNewFileName(date) {
-  const pad = (value) => String(value).padStart(2, "0");
-  const year = date.getFullYear();
-  const month = pad(date.getMonth() + 1);
-  const day = pad(date.getDate());
-  return `${year}-${month}-${day}-new-file`;
-}
+ipcMain.handle("sync-with-origin", async (_event, directory) =>
+  fileOps.syncWithOrigin(directory)
+);
 
 async function getGitStatus(directory, { fetch = true } = {}) {
   const repoRoot = await resolveRepoRoot(directory);

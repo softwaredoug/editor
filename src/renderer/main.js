@@ -206,6 +206,11 @@ function renderIssues(issues) {
   issues.forEach((issue) => {
     const item = document.createElement("div");
     item.className = "issue-item";
+    item.addEventListener("click", () => {
+      if (issue.range) {
+        editor.scrollTo(issue.range.start, issue.range.end);
+      }
+    });
 
     const type = document.createElement("div");
     type.className = "issue-type";

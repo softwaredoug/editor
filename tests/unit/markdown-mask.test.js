@@ -12,6 +12,15 @@ describe("markdown masking", () => {
     assert.equal(masked.length, input.length);
   });
 
+  it("masks link destinations inside prose", () => {
+    const input =
+      "There's Sutton's [bitter lesson](http://www.incompleteideas.net/IncIdeas/BitterLesson.html) about unleashing raw compute.";
+    const masked = maskLinks(input);
+    assert.match(masked, /bitter lesson/);
+    assert.doesNotMatch(masked, /incompleteideas/);
+    assert.equal(masked.length, input.length);
+  });
+
   it("masks image destinations but keeps alt text", () => {
     const input = "![image.png](/assets/media/2026/three-kinds-of-agentic-search/image.png)";
     const masked = maskLinks(input);

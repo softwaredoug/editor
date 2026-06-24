@@ -55,24 +55,40 @@ export function maskLinks(text) {
   }
 
   const chars = Array.from(text);
-  const linkPattern = /!?\[[^\]]*\]\(([^)]*)\)/g;
-  let match = null;
+  let index = 0;
 
-  while ((match = linkPattern.exec(text)) !== null) {
-    const fullMatch = match[0];
-    const matchIndex = match.index;
-    const openParenIndex = fullMatch.lastIndexOf("(");
-    const closeParenIndex = fullMatch.lastIndexOf(")");
-    if (openParenIndex === -1 || closeParenIndex === -1) {
+  while (index < text.length) {
+    const linkStart = text.indexOf("](", index);
+    if (linkStart === -1) {
+      break;
+    }
+
+    let depth = 1;
+    let cursor = linkStart + 2;
+    while (cursor < text.length && depth > 0) {
+      const char = text[cursor];
+      if (char === "(") {
+        depth += 1;
+      } else if (char === ")") {
+        depth -= 1;
+      }
+      cursor += 1;
+    }
+
+    if (depth !== 0) {
+      index = linkStart + 2;
       continue;
     }
-    const start = matchIndex + openParenIndex + 1;
-    const end = matchIndex + closeParenIndex;
+
+    const start = linkStart + 2;
+    const end = cursor - 1;
     for (let i = start; i < end; i += 1) {
       if (chars[i] !== "\n" && chars[i] !== "\r") {
         chars[i] = " ";
       }
     }
+
+    index = cursor;
   }
 
   return chars.join("");

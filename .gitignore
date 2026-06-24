@@ -4,3 +4,6 @@ dist/
 resources/languagetool/
 *.dmg
 .DS_Store
+tmp_editor.png
+tmp_snapshot.txt
+tmp_snapshot2.txt
