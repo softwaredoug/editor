@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld("api", {
   validateDirectory: (directory) => ipcRenderer.invoke("validate-directory", directory),
   listTextFiles: (directory) => ipcRenderer.invoke("list-text-files", directory),
   readFile: (filePath) => ipcRenderer.invoke("read-file", filePath),
+  saveFile: (payload) => ipcRenderer.invoke("save-file", payload),
   createNewFile: (directory) => ipcRenderer.invoke("create-new-file", directory),
   createFolder: (payload) => ipcRenderer.invoke("create-folder", payload),
   renameFile: (payload) => ipcRenderer.invoke("rename-file", payload),

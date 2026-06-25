@@ -254,6 +254,8 @@ ipcMain.handle("list-text-files", async (_event, payload) =>
 
 ipcMain.handle("read-file", async (_event, filePath) => fileOps.readFile(filePath));
 
+ipcMain.handle("save-file", async (_event, payload) => fileOps.saveFile(payload));
+
 ipcMain.handle("create-new-file", async (_event, directory) =>
   fileOps.createNewFile(directory)
 );

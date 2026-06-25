@@ -5,7 +5,7 @@ import path from "node:path";
 import os from "node:os";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { createNewFile, deleteFile, listTextFiles } from "../../src/main/file-ops.js";
+import { createNewFile, deleteFile, listTextFiles, saveFile } from "../../src/main/file-ops.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -205,6 +205,23 @@ describe("file operations with git", () => {
 
         const statusAfter = (await runGit(["status", "--porcelain"], tmpDir)).stdout.trim();
         assert.equal(statusAfter, "");
+      });
+    });
+  });
+
+  describe("save scenarios", () => {
+    it("writes file contents without staging", async () => {
+      await withTempRepo(async (tmpDir) => {
+        const filePath = path.join(tmpDir, "draft.md");
+        await writeFile(filePath, "Initial", "utf8");
+        await runGit(["add", "draft.md"], tmpDir);
+        await runGit(["commit", "-m", "Add draft"], tmpDir);
+
+        const result = await saveFile({ filePath, content: "Updated" });
+        assert.equal(result?.error, undefined);
+
+        const statusAfter = (await runGit(["status", "--porcelain"], tmpDir)).stdout.trim();
+        assert.match(statusAfter, /^M\s+draft\.md$/m);
       });
     });
   });

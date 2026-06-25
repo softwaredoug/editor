@@ -125,6 +125,14 @@ export async function readFile(filePath) {
   return { path: filePath, content };
 }
 
+export async function saveFile({ filePath, content }) {
+  if (!filePath) {
+    return { error: "No file selected." };
+  }
+  await fs.writeFile(filePath, content ?? "", "utf8");
+  return { path: filePath };
+}
+
 export async function createNewFile(directory, { date = new Date() } = {}) {
   if (!directory) {
     return { error: "No directory selected." };

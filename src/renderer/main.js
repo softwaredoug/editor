@@ -72,6 +72,7 @@ let deleteRequiresCommit = false;
 let deleteSummaryAuto = false;
 let activeGlobPattern = null;
 let activeDirectoryInputValue = null;
+let activeFileContent = "";
 
 const editor = createEditor({
   parent: document.getElementById("editor"),
@@ -184,6 +185,10 @@ function scheduleChecks() {
   }
 
   debounceHandle = setTimeout(async () => {
+    const saved = await maybeSaveActiveFile();
+    if (!saved) {
+      return;
+    }
     const text = editor.getText();
     const result = await window.api.checkCorrections({
       text,
@@ -416,12 +421,19 @@ async function applyDirectoryInput() {
 }
 
 async function openFile(path) {
+  if (filePath && path !== filePath) {
+    const saved = await maybeSaveActiveFile();
+    if (!saved) {
+      return;
+    }
+  }
   const result = await window.api.readFile(path);
   if (!result) {
     return;
   }
   setFilePath(result.path);
   editor.setText(result.content ?? "");
+  activeFileContent = result.content ?? "";
   scheduleChecks();
 }
 
@@ -600,6 +612,23 @@ function isMarkdownFile(path) {
   }
   const lower = path.toLowerCase();
   return lower.endsWith(".md") || lower.endsWith(".markdown") || lower.endsWith(".mdx");
+}
+
+async function maybeSaveActiveFile() {
+  if (!filePath) {
+    return true;
+  }
+  const currentText = editor.getText();
+  if (currentText === activeFileContent) {
+    return true;
+  }
+  const result = await window.api.saveFile({ filePath, content: currentText });
+  if (result?.error) {
+    setStatus(result.error);
+    return false;
+  }
+  activeFileContent = currentText;
+  return true;
 }
 
 function parseDirectoryInput(value) {
