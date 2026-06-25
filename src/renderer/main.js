@@ -542,9 +542,14 @@ activeDirectoryInput.addEventListener("blur", async () => {
 });
 
 analyzeButton.addEventListener("click", async () => {
+  console.log("Analyzing")
   if (!isMarkdownFile(filePath)) {
     setStatus("Corrections are available only for markdown files.");
     return;
+  }
+  if (debounceHandle) {
+    clearTimeout(debounceHandle);
+    debounceHandle = null;
   }
   setStatus("Analyzing...");
   const text = editor.getText();
@@ -552,15 +557,19 @@ analyzeButton.addEventListener("click", async () => {
     text,
     filePath
   });
-  issuesByType.llm = result?.issues?.llm ?? [];
+  issuesByType.spell = result?.issues?.spell ?? [];
+  issuesByType.grammar = result?.issues?.grammar ?? [];
+  issuesByType.llm = [];
+  console.log("Analysis result:", result);
 
-  if (result?.errors?.llm) {
-    setStatus(result.errors.llm);
+  if (result?.errors?.grammar) {
+    setStatus(result.errors.grammar);
   } else {
-    setStatus("LLM analysis complete");
+    setStatus("Analysis complete");
     setTimeout(() => setStatus(""), 1500);
   }
 
+  console.debug("Analysis result:", result);
   refreshIssues();
 });
 

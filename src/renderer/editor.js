@@ -4,6 +4,7 @@ import { markdown } from "@codemirror/lang-markdown";
 import { history, historyKeymap } from "@codemirror/commands";
 
 const setIssuesEffect = StateEffect.define();
+const setHoverSuppressedEffect = StateEffect.define();
 
 function normalizeIssues(issues, docLength) {
   const normalized = [];
@@ -63,8 +64,26 @@ const issuesState = StateField.define({
   }
 });
 
+const hoverSuppressedState = StateField.define({
+  create() {
+    return false;
+  },
+  update(value, transaction) {
+    let next = value;
+    for (const effect of transaction.effects) {
+      if (effect.is(setHoverSuppressedEffect)) {
+        next = Boolean(effect.value);
+      }
+    }
+    return next;
+  }
+});
+
 function createIssuesTooltip({ onApplyIssue, onDismissIssue, onIgnoreIssue } = {}) {
   return hoverTooltip((view, pos) => {
+    if (view.state.field(hoverSuppressedState)) {
+      return null;
+    }
     const issues = view.state.field(issuesState);
     const match = issues.find(
       (issue) => pos >= issue.range.start && pos <= issue.range.end
@@ -76,9 +95,16 @@ function createIssuesTooltip({ onApplyIssue, onDismissIssue, onIgnoreIssue } = {
     return {
       pos: match.range.start,
       end: match.range.end,
-      create() {
-        const container = document.createElement("div");
-        container.className = "cm-tooltip-issue";
+        create() {
+          const container = document.createElement("div");
+          container.className = "cm-tooltip-issue";
+          const closeTooltip = () => {
+            view.dispatch({ effects: setHoverSuppressedEffect.of(true) });
+            container.remove();
+            setTimeout(() => {
+              view.dispatch({ effects: setHoverSuppressedEffect.of(false) });
+            }, 250);
+          };
 
         const title = document.createElement("div");
         title.className = "cm-tooltip-issue-title";
@@ -116,6 +142,7 @@ function createIssuesTooltip({ onApplyIssue, onDismissIssue, onIgnoreIssue } = {
             applyButton.addEventListener("click", (event) => {
               event.preventDefault();
               event.stopPropagation();
+              closeTooltip();
               onApplyIssue(match);
             });
             actions.appendChild(applyButton);
@@ -129,6 +156,7 @@ function createIssuesTooltip({ onApplyIssue, onDismissIssue, onIgnoreIssue } = {
             dismissButton.addEventListener("click", (event) => {
               event.preventDefault();
               event.stopPropagation();
+              closeTooltip();
               onDismissIssue(match);
             });
             actions.appendChild(dismissButton);
@@ -144,11 +172,12 @@ function createIssuesTooltip({ onApplyIssue, onDismissIssue, onIgnoreIssue } = {
             if (!canIgnore) {
               ignoreButton.title = "Available for spelling only";
             } else {
-              ignoreButton.addEventListener("click", (event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                onIgnoreIssue(match);
-              });
+                ignoreButton.addEventListener("click", (event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  closeTooltip();
+                  onIgnoreIssue(match);
+                });
             }
             actions.appendChild(ignoreButton);
           }
@@ -177,6 +206,7 @@ export function createEditor({ parent, initialText, onChange, onApplyIssue, onDi
       EditorView.lineWrapping,
       issuesField,
       issuesState,
+      hoverSuppressedState,
       createIssuesTooltip({ onApplyIssue, onDismissIssue, onIgnoreIssue }),
       EditorView.updateListener.of((update) => {
         if (update.docChanged) {
@@ -214,6 +244,9 @@ export function createEditor({ parent, initialText, onChange, onApplyIssue, onDi
       });
     },
     setIssues: (issues) => {
+      issues.forEach((issue) => {
+        console.warn(`Setting issue:`, issue);
+      });
       view.dispatch({
         effects: setIssuesEffect.of({
           issues: issues ?? [],

@@ -372,7 +372,7 @@ ipcMain.handle("analyze-corrections", async (_event, payload) =>
     if (!fileCorrections) {
       return { issues: { spell: [], grammar: [], llm: [] }, errors: { grammar: null, llm: null } };
     }
-    return fileCorrections.runAnalysis({ text: payload?.text ?? "" });
+    return fileCorrections.runAnalysis({ text: payload?.text ?? "", includeLlm: false });
   }
 );
 

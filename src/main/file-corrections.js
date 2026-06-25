@@ -47,6 +47,7 @@ export class FileCorrections {
     if (this.engine.grammarChecker) {
       const grammarResult = await this.engine.grammarChecker(text);
       grammarError = grammarResult?.error ?? null;
+      console.debug("Num effective dismissed entries:", effectiveDismissed.length);
       grammarIssues = applySpellingExceptions(
         filterDismissedIssues(
           filterIssuesByIgnoredRanges(grammarResult?.issues ?? [], ignoredRanges),
@@ -88,6 +89,7 @@ export class FileCorrections {
     });
     if (!result?.error) {
       this.refreshDismissed();
+      console.debug(`Dismissed issue for file ${this.filePath}:`, issue);
     }
     return result;
   }
@@ -276,7 +278,9 @@ function isDismissedIssue({ issue, text, entries }) {
     || normalizeSnippet(issue.word ?? "")
     || normalizeSnippet(issue.suggestions?.[0] ?? "");
   const { before, after } = extractContext(text, issue.range.start, issue.range.end);
-  return entries.some((entry) => matchesDismissedEntry({ entry, change, before, after }));
+  const isDismissed = entries.some((entry) => matchesDismissedEntry({ entry, change, before, after }));
+  console.debug(`Checking if issue is dismissed:`, { change, before, after, isDismissed });
+  return isDismissed;
 }
 
 function matchesDismissedEntry({ entry, change, before, after }) {

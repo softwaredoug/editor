@@ -1,5 +1,8 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import os from "node:os";
+import path from "node:path";
+import fs from "node:fs/promises";
 import { createCorrectionsEngine } from "../../src/main/corrections.js";
 
 describe("corrections engine", () => {
@@ -106,5 +109,61 @@ describe("corrections engine", () => {
     });
 
     assert.equal(result.issues.grammar.length, 0);
+  });
+
+  it("persists dismissed changes without throwing", async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "corrections-"));
+    const engine = createCorrectionsEngine({ spellChecker: () => [] });
+    await engine.setDirectory(tmpDir);
+
+    const text = "Ubik is a proper noun.";
+    const start = text.indexOf("Ubik");
+    const result = await engine.addDismissedChange({
+      directory: tmpDir,
+      filePath: path.join(tmpDir, "sample.md"),
+      text,
+      issue: {
+        type: "spell",
+        word: "Ubik",
+        range: { start, end: start + "Ubik".length }
+      }
+    });
+
+    assert.equal(result?.error ?? null, null);
+  });
+
+  it("filters dismissed spelling issues on analysis", async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "corrections-"));
+    const text = "Ubik is a proper noun.";
+    const start = text.indexOf("Ubik");
+    const spellChecker = () => [
+      {
+        id: "spell-0",
+        type: "spell",
+        word: "Ubik",
+        range: { start, end: start + "Ubik".length },
+        message: "Possible misspelling: Ubik",
+        suggestions: ["Ubik"],
+        source: "local",
+        confidence: 0.7,
+        status: "open"
+      }
+    ];
+    const engine = createCorrectionsEngine({ spellChecker });
+    await engine.setDirectory(tmpDir);
+    const filePath = path.join(tmpDir, "sample.md");
+    const fileCorrections = engine.getFileCorrections(filePath);
+
+    await fileCorrections.dismissIssue({
+      issue: {
+        type: "spell",
+        word: "Ubik",
+        range: { start, end: start + "Ubik".length }
+      },
+      text
+    });
+
+    const result = await fileCorrections.runAnalysis({ text, includeLlm: false });
+    assert.equal(result.issues.spell.length, 0);
   });
 });

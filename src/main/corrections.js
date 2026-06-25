@@ -110,9 +110,8 @@ export function createCorrectionsEngine({
     const fileTarget = path.join(targetDirectory, "dismissed-changes.txt");
     const lines = dismissedChangesState.map((change) => formatDismissedLine(change));
     await fs.writeFile(fileTarget, `${lines.join("\n")}\n`, "utf8");
-    const fileCorrections = fileCorrectionsMap.get(entry.filePath);
-    if (fileCorrections) {
-      fileCorrections.refreshDismissed();
+    if (activeFileCorrections && activeFilePath === entry.filePath) {
+      activeFileCorrections.refreshDismissed();
     }
     return { changes: dismissedChangesState };
   }
