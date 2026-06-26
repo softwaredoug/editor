@@ -35,7 +35,6 @@ const repoStatusDot = document.getElementById("repo-status-dot");
 const repoStatusLabel = document.getElementById("repo-status-label");
 
 let activeFilePath = null;
-let activeDirectory = null;
 let repoStatus = null;
 let activeGlobPattern = null;
 
@@ -91,9 +90,7 @@ directorySelector = new DirectorySelector({
   input: activeDirectoryInput,
   errorLabel: directoryErrorLabel,
   onChange: async ({ directory, pattern, display }) => {
-    activeDirectory = directory;
     activeGlobPattern = pattern;
-    await editorComponent.setActiveDirectory(directory);
     await refreshFileList();
   },
   onStatus: (message) => setStatus(message)
@@ -114,7 +111,7 @@ const repoModal = new RepoModal({
   fileService,
   getRepoStatus: () => repoStatus,
   setRepoStatus: (status) => setRepoStatus(status),
-  getActiveDirectory: () => activeDirectory
+  getActiveDirectory: () => directorySelector.activeDirectory,
 });
 
 const renameModal = new RenameModal({
@@ -188,23 +185,24 @@ function setRepoStatus(nextStatus) {
 }
 
 async function refreshRepoStatus() {
-  if (!activeDirectory) {
+  if (!directorySelector.activeDirectory) {
     setRepoStatus(null);
     return;
   }
-  const result = await fileService.getGitSyncStatus(activeDirectory);
+  const result = await fileService.getGitSyncStatus(directorySelector.activeDirectory);
   setRepoStatus(result);
 }
 
 
 
 async function refreshFileList() {
-  if (!activeDirectory) {
+  if (!directorySelector.activeDirectory) {
     fileList.setFiles({ files: [], activeDirectory: null });
     setRepoStatus(null);
     await editorComponent.setActiveDirectory(null);
     return;
   }
+  const activeDirectory = directorySelector.activeDirectory;
   const result = await fileService.listTextFiles({
     directory: activeDirectory,
     pattern: activeGlobPattern
@@ -262,6 +260,7 @@ function buildRenameSummary(oldPath, newName) {
   if (!oldPath || !newName) {
     return "";
   }
+  const activeDirectory = directorySelector.activeDirectory;
   const baseDir = activeDirectory || "";
   const oldLabel = baseDir ? oldPath.replace(`${baseDir}/`, "") : oldPath;
   const newPath = baseDir ? `${baseDir}/${newName}` : newName;
@@ -273,6 +272,7 @@ function buildDeleteSummary(path) {
   if (!path) {
     return "";
   }
+  const activeDirectory = directorySelector.activeDirectory;
   const baseDir = activeDirectory || "";
   const label = baseDir ? path.replace(`${baseDir}/`, "") : path;
   return `Deleted file ${label}`;

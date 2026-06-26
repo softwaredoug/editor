@@ -15,6 +15,7 @@ export class DirectorySelector {
     this.onChange = onChange ?? (() => {});
     this.onStatus = onStatus ?? (() => {});
     this.storage = storage;
+    this.activeDirectory = null;
     this.state = { directory: null, pattern: null, display: "" };
     this.bindEvents();
   }
@@ -108,6 +109,7 @@ export class DirectorySelector {
     this.setError("");
     if (nextState.directory) {
       this.storage.setItem("activeDirectory", nextState.directory);
+      this.activeDirectory = nextState.directory;
       if (nextState.display) {
         this.storage.setItem("activeDirectoryInput", nextState.display);
       }

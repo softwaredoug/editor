@@ -1,5 +1,16 @@
 import { Issue } from "./issue.js";
 
+function dirname(filePath) {
+  const normalized = filePath.replace(/\\/g, "/");
+  const withoutTrailingSlash = normalized.replace(/\/+$/, "");
+  const index = withoutTrailingSlash.lastIndexOf("/");
+
+  if (index === -1) return ".";
+  if (index === 0) return "/";
+
+  return withoutTrailingSlash.slice(0, index);
+}
+
 export class EditorComponent {
   constructor({ editor, fileService, correctionsService, onStatus, onIssuesChanged, onFileChanged }) {
     this.editor = editor;
@@ -31,11 +42,6 @@ export class EditorComponent {
     return this.issues;
   }
 
-  setActiveDirectory(directory) {
-    this.activeDirectory = directory ?? null;
-    return this.correctionsService.setCorrectionsDirectory(directory);
-  }
-
   async openFile(path) {
     if (this.filePath && path !== this.filePath) {
       const saved = await this.saveIfDirty();
@@ -43,11 +49,14 @@ export class EditorComponent {
         return false;
       }
     }
+    // get base dir, set file path
 
     const result = await this.fileService.readFile(path);
     if (!result) {
       return false;
     }
+    const basePath = dirname(path);
+    this.correctionsService.setCorrectionsDirectory(basePath);
     this.filePath = result.path;
     this.editor.setText(result.content ?? "");
     this.originalText = result.content ?? "";
