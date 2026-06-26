@@ -1,9 +1,9 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { JSDOM } from "jsdom";
-import fs from "node:fs/promises";
-import { fileURLToPath } from "node:url";
 import { FileList } from "../../src/renderer/components/file-list.js";
+import { createFileServiceMock } from "../helpers/service-mocks.js";
+import { loadRendererTemplates, createTemplateFetch } from "../helpers/template-mocks.js";
 
 describe("FileList", () => {
   it("renders items and handles double-click", () => {
@@ -13,22 +13,13 @@ describe("FileList", () => {
     const { document } = dom.window;
     const mountEl = document.getElementById("files");
 
-    const htmlPath = fileURLToPath(
-      new URL("../../src/renderer/components/file-list.html", import.meta.url)
-    );
-    return fs.readFile(htmlPath, "utf8").then((html) => {
-      global.fetch = async () => ({
-        ok: true,
-        status: 200,
-        async text() {
-          return html;
-        }
-      });
+    return loadRendererTemplates().then((templates) => {
+      global.fetch = createTemplateFetch(templates);
 
       let opened = null;
       const fileList = new FileList({
         mountEl,
-        fileService: {},
+        fileService: createFileServiceMock(),
         modalMount: document.body,
         window: dom.window,
         onFileOpen: (path) => {
@@ -63,21 +54,12 @@ describe("FileList", () => {
     const { document } = dom.window;
     const mountEl = document.getElementById("files");
 
-    const htmlPath = fileURLToPath(
-      new URL("../../src/renderer/components/file-list.html", import.meta.url)
-    );
-    return fs.readFile(htmlPath, "utf8").then((html) => {
-      global.fetch = async () => ({
-        ok: true,
-        status: 200,
-        async text() {
-          return html;
-        }
-      });
+    return loadRendererTemplates().then((templates) => {
+      global.fetch = createTemplateFetch(templates);
 
       const fileList = new FileList({
         mountEl,
-        fileService: {},
+        fileService: createFileServiceMock(),
         modalMount: document.body,
         window: dom.window
       });
@@ -96,21 +78,12 @@ describe("FileList", () => {
     const { document } = dom.window;
     const mountEl = document.getElementById("files");
 
-    const htmlPath = fileURLToPath(
-      new URL("../../src/renderer/components/file-list.html", import.meta.url)
-    );
-    return fs.readFile(htmlPath, "utf8").then((html) => {
-      global.fetch = async () => ({
-        ok: true,
-        status: 200,
-        async text() {
-          return html;
-        }
-      });
+    return loadRendererTemplates().then((templates) => {
+      global.fetch = createTemplateFetch(templates);
 
       const fileList = new FileList({
         mountEl,
-        fileService: {},
+        fileService: createFileServiceMock(),
         modalMount: document.body,
         window: dom.window
       });

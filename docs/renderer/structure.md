@@ -16,6 +16,7 @@ Location: `src/renderer/components/app-component.js`
 Responsibilities:
 - Loads the root app template.
 - Owns top-level app wiring (services, components, repo status, global keybindings).
+- Accepts injected services and editor factory for tests.
 
 ## Components
 

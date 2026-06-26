@@ -1,9 +1,8 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { JSDOM } from "jsdom";
-import fs from "node:fs/promises";
-import { fileURLToPath } from "node:url";
 import { IssuesSidebar } from "../../src/renderer/components/issues-sidebar.js";
+import { loadRendererTemplates, createTemplateFetch } from "../helpers/template-mocks.js";
 
 describe("IssuesSidebar", () => {
   it("renders issues and wires actions", () => {
@@ -13,17 +12,8 @@ describe("IssuesSidebar", () => {
     const { document } = dom.window;
     const mountEl = document.getElementById("issues");
 
-    const htmlPath = fileURLToPath(
-      new URL("../../src/renderer/components/issues-sidebar.html", import.meta.url)
-    );
-    return fs.readFile(htmlPath, "utf8").then((html) => {
-      global.fetch = async () => ({
-        ok: true,
-        status: 200,
-        async text() {
-          return html;
-        }
-      });
+    return loadRendererTemplates().then((templates) => {
+      global.fetch = createTemplateFetch(templates);
 
       const actions = [];
       const issue = {
@@ -74,17 +64,8 @@ describe("IssuesSidebar", () => {
     const { document } = dom.window;
     const mountEl = document.getElementById("issues");
 
-    const htmlPath = fileURLToPath(
-      new URL("../../src/renderer/components/issues-sidebar.html", import.meta.url)
-    );
-    return fs.readFile(htmlPath, "utf8").then((html) => {
-      global.fetch = async () => ({
-        ok: true,
-        status: 200,
-        async text() {
-          return html;
-        }
-      });
+    return loadRendererTemplates().then((templates) => {
+      global.fetch = createTemplateFetch(templates);
 
       const sidebar = new IssuesSidebar({ mountEl });
       return sidebar.ensureReady().then(() => {

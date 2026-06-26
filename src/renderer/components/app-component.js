@@ -10,15 +10,22 @@ import { CommitModal } from "../modals/commit-modal.js";
 import { RepoModal } from "../modals/repo-modal.js";
 
 export class AppComponent {
-  constructor({ mountEl, window }) {
+  constructor({
+    mountEl,
+    window,
+    fileService = new FileService(),
+    correctionsService = new CorrectionsService(),
+    createEditorFn = createEditor
+  }) {
     this.base = new BaseComponent({
       mountEl,
       templateUrl: new URL("./app-component.html?raw", import.meta.url)
     });
     this.window = window;
     this.rendererStart = performance.now();
-    this.fileService = new FileService();
-    this.correctionsService = new CorrectionsService();
+    this.fileService = fileService;
+    this.correctionsService = correctionsService;
+    this.createEditor = createEditorFn;
     this.editorComponent = null;
     this.issuesSidebar = null;
     this.directorySelector = null;
@@ -50,7 +57,7 @@ export class AppComponent {
     const repoStatusDot = this.base.query("#repo-status-dot");
     const repoStatusLabel = this.base.query("#repo-status-label");
 
-    const editor = createEditor({
+    const editor = this.createEditor({
       parent: this.base.query("#editor"),
       initialText: "",
       onChange: () => this.editorComponent?.handleEditorChange(),
