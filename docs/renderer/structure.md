@@ -47,6 +47,7 @@ Responsibilities:
 - Highlights the active file.
 - Emits file open events on double click.
 - Owns new file creation and new folder modal triggering.
+- Loads its own HTML fragment via `BaseComponent`.
 
 ## Modals
 

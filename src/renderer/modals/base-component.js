@@ -19,8 +19,7 @@ export class BaseComponent {
     const html = await this.fetchTemplate();
     const template = this.mountEl.ownerDocument.createElement("template");
     template.innerHTML = html.trim();
-    const element = template.content.querySelector(".modal")
-      || template.content.firstElementChild;
+    const element = template.content.querySelector(".component.root");
     if (!element) {
       throw new Error("Component template is empty.");
     }

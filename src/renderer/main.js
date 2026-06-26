@@ -27,16 +27,13 @@ const directoryErrorLabel = document.getElementById("directory-error");
 const activeFileLabel = document.getElementById("active-file");
 const statusLabel = document.getElementById("status");
 const issuesList = document.getElementById("issues-list");
-const filesList = document.getElementById("files-list");
-const newFileButton = document.getElementById("new-file-button");
-const newFolderButton = document.getElementById("new-folder-button");
+const filesPanel = document.getElementById("files-panel");
 const repoStatusButton = document.getElementById("repo-status");
 const repoStatusDot = document.getElementById("repo-status-dot");
 const repoStatusLabel = document.getElementById("repo-status-label");
 
 let activeFilePath = null;
 let repoStatus = null;
-let activeGlobPattern = null;
 
 let editorComponent;
 let issuesSidebar;
@@ -63,9 +60,7 @@ issuesSidebar = new IssuesSidebar({
 });
 
 fileList = new FileList({
-  mountEl: filesList,
-  newFileButton,
-  newFolderButton,
+  mountEl: filesPanel,
   fileService,
   modalMount,
   window,
@@ -90,7 +85,6 @@ directorySelector = new DirectorySelector({
   input: activeDirectoryInput,
   errorLabel: directoryErrorLabel,
   onChange: async ({ directory, pattern, display }) => {
-    activeGlobPattern = pattern;
     await refreshFileList();
   },
   onStatus: (message) => setStatus(message)
@@ -111,7 +105,7 @@ const repoModal = new RepoModal({
   fileService,
   getRepoStatus: () => repoStatus,
   setRepoStatus: (status) => setRepoStatus(status),
-  getActiveDirectory: () => directorySelector.activeDirectory,
+  getActiveDirectory: () => directorySelector.getActiveDirectory(),
 });
 
 const renameModal = new RenameModal({
@@ -152,6 +146,7 @@ const deleteModal = new DeleteModal({
   }
 });
 
+fileList.ensureReady();
 directorySelector.initialize();
 logStartup("Renderer initialized");
 
@@ -185,24 +180,24 @@ function setRepoStatus(nextStatus) {
 }
 
 async function refreshRepoStatus() {
-  if (!directorySelector.activeDirectory) {
+  if (!directorySelector.getActiveDirectory()) {
     setRepoStatus(null);
     return;
   }
-  const result = await fileService.getGitSyncStatus(directorySelector.activeDirectory);
+  const result = await fileService.getGitSyncStatus(directorySelector.getActiveDirectory());
   setRepoStatus(result);
 }
 
 
 
 async function refreshFileList() {
-  if (!directorySelector.activeDirectory) {
+  const activeDirectory = directorySelector.getActiveDirectory();
+  if (!activeDirectory) {
     fileList.setFiles({ files: [], activeDirectory: null });
     setRepoStatus(null);
-    await editorComponent.setActiveDirectory(null);
     return;
   }
-  const activeDirectory = directorySelector.activeDirectory;
+  const activeGlobPattern = directorySelector.getActiveGlobPattern();
   const result = await fileService.listTextFiles({
     directory: activeDirectory,
     pattern: activeGlobPattern
@@ -260,7 +255,7 @@ function buildRenameSummary(oldPath, newName) {
   if (!oldPath || !newName) {
     return "";
   }
-  const activeDirectory = directorySelector.activeDirectory;
+  const activeDirectory = directorySelector.getActiveDirectory();
   const baseDir = activeDirectory || "";
   const oldLabel = baseDir ? oldPath.replace(`${baseDir}/`, "") : oldPath;
   const newPath = baseDir ? `${baseDir}/${newName}` : newName;
@@ -272,7 +267,7 @@ function buildDeleteSummary(path) {
   if (!path) {
     return "";
   }
-  const activeDirectory = directorySelector.activeDirectory;
+  const activeDirectory = directorySelector.getActiveDirectory();
   const baseDir = activeDirectory || "";
   const label = baseDir ? path.replace(`${baseDir}/`, "") : path;
   return `Deleted file ${label}`;

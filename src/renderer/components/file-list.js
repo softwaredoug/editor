@@ -1,3 +1,4 @@
+import { BaseComponent } from "../modals/base-component.js";
 import { NewFolderModal } from "../modals/new-folder-modal.js";
 
 export class FileList {
@@ -5,20 +6,19 @@ export class FileList {
     mountEl,
     onFileDoubleClick,
     onStatus,
-    newFileButton,
-    newFolderButton,
     fileService,
     modalMount,
     window,
     onFileOpen,
     onRefresh
   }) {
-    this.mountEl = mountEl;
+    this.base = new BaseComponent({
+      mountEl,
+      templateUrl: new URL("./file-list.html?raw", import.meta.url)
+    });
     this.document = mountEl?.ownerDocument ?? document;
     this.onFileDoubleClick = onFileDoubleClick ?? (() => {});
     this.onStatus = onStatus ?? (() => {});
-    this.newFileButton = newFileButton;
-    this.newFolderButton = newFolderButton;
     this.fileService = fileService;
     this.onFileOpen = onFileOpen ?? (() => {});
     this.onRefresh = onRefresh ?? (() => {});
@@ -29,37 +29,56 @@ export class FileList {
     this.activeFilePath = null;
     this.tooMany = false;
     this.newFolderModal = null;
-    this.bindEvents();
+    this.listEl = null;
+    this.newFileButton = null;
+    this.newFolderButton = null;
+    this._bound = false;
   }
 
-  bindEvents() {
-    if (this.newFileButton) {
-      this.newFileButton.addEventListener("click", () => this.handleNewFileClick());
+  async ensureReady() {
+    await this.base.ensureReady();
+    if (this._bound) {
+      return;
     }
-    if (this.newFolderButton) {
-      this.newFolderModal = new NewFolderModal({
-        mountEl: this.modalMount,
-        window: this.window,
-        onConfirm: ({ name }) => this.handleNewFolderConfirm({ name })
-      });
-      this.newFolderButton.addEventListener("click", () => this.handleNewFolderClick());
-    }
+    this.listEl = this.base.query(".files-list");
+    this.newFileButton = this.base.query(".new-file-button");
+    this.newFolderButton = this.base.query(".new-folder-button");
+    this.newFolderModal = new NewFolderModal({
+      mountEl: this.modalMount,
+      window: this.window,
+      onConfirm: ({ name }) => this.handleNewFolderConfirm({ name })
+    });
+    this.newFileButton?.addEventListener("click", () => this.handleNewFileClick());
+    this.newFolderButton?.addEventListener("click", () => this.handleNewFolderClick());
+    this._bound = true;
+    this.render();
   }
 
   setFiles({ files, activeDirectory, tooMany }) {
     this.files = files ?? [];
     this.activeDirectory = activeDirectory ?? null;
     this.tooMany = Boolean(tooMany);
-    this.render();
+    if (this.listEl) {
+      this.render();
+    } else {
+      void this.ensureReady();
+    }
   }
 
   setActiveFilePath(path) {
     this.activeFilePath = path ?? null;
-    this.highlightActiveFile();
+    if (this.listEl) {
+      this.highlightActiveFile();
+    } else {
+      void this.ensureReady();
+    }
   }
 
   render() {
-    this.mountEl.innerHTML = "";
+    if (!this.listEl) {
+      return;
+    }
+    this.listEl.innerHTML = "";
 
     if (!this.files.length) {
       const empty = this.document.createElement("div");
@@ -67,7 +86,7 @@ export class FileList {
       empty.textContent = this.activeDirectory
         ? "No markdown files found"
         : "Select a folder to begin";
-      this.mountEl.appendChild(empty);
+      this.listEl.appendChild(empty);
       return;
     }
 
@@ -77,21 +96,24 @@ export class FileList {
       item.textContent = file.relativePath;
       item.dataset.path = file.path;
       item.addEventListener("dblclick", () => this.onFileDoubleClick(file.path));
-      this.mountEl.appendChild(item);
+      this.listEl.appendChild(item);
     });
 
     if (this.tooMany) {
       const warning = this.document.createElement("div");
       warning.className = "files-warning";
       warning.textContent = "⚠️ Too many files to list. Showing first 1000.";
-      this.mountEl.appendChild(warning);
+      this.listEl.appendChild(warning);
     }
 
     this.highlightActiveFile();
   }
 
   highlightActiveFile() {
-    const items = Array.from(this.mountEl.querySelectorAll(".file-item"));
+    if (!this.listEl) {
+      return;
+    }
+    const items = Array.from(this.listEl.querySelectorAll(".file-item"));
     items.forEach((item) => {
       if (item.dataset.path === this.activeFilePath) {
         item.classList.add("active");

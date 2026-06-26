@@ -16,7 +16,7 @@ describe("BaseModal", () => {
     const { window } = dom;
     const { document } = window;
     const html = [
-      '<div class="modal hidden" aria-hidden="true">',
+      '<div class="modal component root hidden" aria-hidden="true">',
       '  <div class="modal-backdrop"></div>',
       '  <div class="modal-card"><button id="ok-btn">OK</button></div>',
       "</div>"
