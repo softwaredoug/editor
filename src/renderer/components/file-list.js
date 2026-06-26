@@ -1,34 +1,43 @@
 import { BaseComponent } from "../modals/base-component.js";
+import { DeleteModal } from "../modals/delete-modal.js";
 import { NewFolderModal } from "../modals/new-folder-modal.js";
+import { RenameModal } from "../modals/rename-modal.js";
 
 export class FileList {
   constructor({
     mountEl,
-    onFileDoubleClick,
     onStatus,
     fileService,
     modalMount,
     window,
     onFileOpen,
-    onRefresh
+    onRefresh,
+    onRepoRefresh,
+    editorComponent,
+    getRepoStatus
   }) {
     this.base = new BaseComponent({
       mountEl,
       templateUrl: new URL("./file-list.html?raw", import.meta.url)
     });
     this.document = mountEl?.ownerDocument ?? document;
-    this.onFileDoubleClick = onFileDoubleClick ?? (() => {});
     this.onStatus = onStatus ?? (() => {});
     this.fileService = fileService;
     this.onFileOpen = onFileOpen ?? (() => {});
     this.onRefresh = onRefresh ?? (() => {});
+    this.onRepoRefresh = onRepoRefresh ?? (() => {});
+    this.editorComponent = editorComponent;
+    this.getRepoStatus = getRepoStatus ?? (() => null);
     this.modalMount = modalMount;
     this.window = window;
     this.files = [];
     this.activeDirectory = null;
+    this.activePattern = null;
     this.activeFilePath = null;
     this.tooMany = false;
     this.newFolderModal = null;
+    this.renameModal = null;
+    this.deleteModal = null;
     this.listEl = null;
     this.newFileButton = null;
     this.newFolderButton = null;
@@ -47,6 +56,50 @@ export class FileList {
       mountEl: this.modalMount,
       window: this.window,
       onConfirm: ({ name }) => this.handleNewFolderConfirm({ name })
+    });
+    this.renameModal = new RenameModal({
+      mountEl: this.modalMount,
+      window: this.window,
+      fileService: this.fileService,
+      buildSummary: (oldPath, newName) => this.buildRenameSummary(oldPath, newName),
+      onConfirm: async ({ result }) => {
+        if (result?.path) {
+          await this.onFileOpen(result.path);
+        }
+        await this.refreshFileList({
+          directory: this.activeDirectory,
+          pattern: this.activePattern
+        });
+        await this.onRefresh();
+        await this.onRepoRefresh();
+      },
+      onDelete: (targetPath) => {
+        this.renameModal.close();
+        this.openDeleteModal(targetPath);
+      }
+    });
+    this.deleteModal = new DeleteModal({
+      mountEl: this.modalMount,
+      window: this.window,
+      onConfirm: async ({ filePath, messageShort, messageLong }) => {
+        const result = await this.fileService.deleteFile({
+          filePath,
+          messageShort,
+          messageLong
+        });
+        if (result?.error) {
+          this.deleteModal.setError(result.error);
+          return;
+        }
+        this.deleteModal.close();
+        this.editorComponent?.closeFile();
+        await this.refreshFileList({
+          directory: this.activeDirectory,
+          pattern: this.activePattern
+        });
+        await this.onRefresh();
+        await this.onRepoRefresh();
+      }
     });
     this.newFileButton?.addEventListener("click", () => this.handleNewFileClick());
     this.newFolderButton?.addEventListener("click", () => this.handleNewFolderClick());
@@ -95,7 +148,7 @@ export class FileList {
       item.className = "file-item";
       item.textContent = file.relativePath;
       item.dataset.path = file.path;
-      item.addEventListener("dblclick", () => this.onFileDoubleClick(file.path));
+      item.addEventListener("dblclick", () => this.handleFileDoubleClick(file.path));
       this.listEl.appendChild(item);
     });
 
@@ -123,6 +176,54 @@ export class FileList {
     });
   }
 
+  async handleFileDoubleClick(path) {
+    if (!path) {
+      return;
+    }
+    if (path === this.activeFilePath) {
+      this.openRenameModal(path);
+      return;
+    }
+    await this.onFileOpen(path);
+  }
+
+  openRenameModal(path) {
+    const repoStatus = this.getRepoStatus();
+    this.renameModal.open({
+      path,
+      requiresCommit: Boolean(repoStatus?.available)
+    });
+  }
+
+  openDeleteModal(path) {
+    const repoStatus = this.getRepoStatus();
+    this.deleteModal.open({
+      path,
+      requiresCommit: Boolean(repoStatus?.available),
+      summary: repoStatus?.available ? this.buildDeleteSummary(path) : ""
+    });
+  }
+
+  buildRenameSummary(oldPath, newName) {
+    if (!oldPath || !newName) {
+      return "";
+    }
+    const baseDir = this.activeDirectory || "";
+    const oldLabel = baseDir ? oldPath.replace(`${baseDir}/`, "") : oldPath;
+    const newPath = baseDir ? `${baseDir}/${newName}` : newName;
+    const newLabel = baseDir ? newPath.replace(`${baseDir}/`, "") : newPath;
+    return `Moved file ${oldLabel} to ${newLabel}`;
+  }
+
+  buildDeleteSummary(path) {
+    if (!path) {
+      return "";
+    }
+    const baseDir = this.activeDirectory || "";
+    const label = baseDir ? path.replace(`${baseDir}/`, "") : path;
+    return `Deleted file ${label}`;
+  }
+
   async handleNewFileClick() {
     if (!this.activeDirectory) {
       this.onStatus("Select a folder to add a file.");
@@ -136,6 +237,10 @@ export class FileList {
     if (result?.path) {
       await this.onFileOpen(result.path);
     }
+    await this.refreshFileList({
+      directory: this.activeDirectory,
+      pattern: this.activePattern
+    });
     await this.onRefresh();
   }
 
@@ -164,6 +269,29 @@ export class FileList {
     this.newFolderModal?.close();
     this.onStatus(`Folder created: ${name}`);
     setTimeout(() => this.onStatus(""), 1500);
+    await this.refreshFileList({
+      directory: this.activeDirectory,
+      pattern: this.activePattern
+    });
     await this.onRefresh();
+  }
+
+  async refreshFileList({ directory, pattern }) {
+    this.activeDirectory = directory ?? null;
+    this.activePattern = pattern ?? null;
+    if (!directory) {
+      this.setFiles({ files: [], activeDirectory: null, tooMany: false });
+      return { files: [], tooMany: false };
+    }
+    const result = await this.fileService.listTextFiles({
+      directory,
+      pattern
+    });
+    this.setFiles({
+      files: result?.files ?? [],
+      activeDirectory: directory,
+      tooMany: result?.tooMany
+    });
+    return result;
   }
 }

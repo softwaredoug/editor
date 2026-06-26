@@ -4,10 +4,18 @@ This document describes the current renderer architecture and the responsibiliti
 
 ## High-level layout
 
-- `src/renderer/main.js` wires the app together, instantiates services and components, and owns top-level UI glue.
+- `src/renderer/main.js` bootstraps `AppComponent`.
 - `src/renderer/components/` holds stateful UI components.
 - `src/renderer/modals/` contains modal UI classes and their HTML fragments.
 - `src/renderer/services/` contains thin IPC wrappers.
+
+## AppComponent
+
+Location: `src/renderer/components/app-component.js`
+
+Responsibilities:
+- Loads the root app template.
+- Owns top-level app wiring (services, components, repo status, global keybindings).
 
 ## Components
 
@@ -57,6 +65,8 @@ Responsibilities:
 - Emits file open events on double click.
 - Owns new file creation and new folder modal triggering.
 - Loads its own HTML fragment via `BaseComponent`.
+- Owns rename/delete modal flows for file lifecycle actions.
+- Exposes `refreshFileList({ directory, pattern })` for list reloads.
 
 ### IssuesSidebar
 

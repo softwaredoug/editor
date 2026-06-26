@@ -7,34 +7,7 @@
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <div id="app">
-      <header class="toolbar">
-        <div class="toolbar-left">
-          <div id="directory-selector"></div>
-        </div>
-        <div class="toolbar-right">
-          <span id="active-file" class="active-file">No file selected</span>
-          <button id="analyze-button" class="action-button">Analyze</button>
-          <span id="status" class="status"></span>
-        </div>
-      </header>
-      <div class="content">
-        <aside id="files-panel"></aside>
-        <div id="editor" class="editor"></div>
-        <aside id="issues-panel"></aside>
-      </div>
-      <footer class="legend">
-        <div class="legend-items">
-          <span class="legend-item"><span class="legend-swatch spell"></span>Spell</span>
-          <span class="legend-item"><span class="legend-swatch grammar"></span>Grammar</span>
-          <span class="legend-item"><span class="legend-swatch llm"></span>LLM</span>
-        </div>
-        <button id="repo-status" class="repo-status hidden" type="button">
-          <span id="repo-status-dot" class="repo-status-dot"></span>
-          <span id="repo-status-label" class="repo-status-label">Repo</span>
-        </button>
-      </footer>
-    </div>
+    <div id="app-root"></div>
     <script type="module" src="./main.js"></script>
   </body>
 </html>

@@ -31,7 +31,7 @@ describe("FileList", () => {
         fileService: {},
         modalMount: document.body,
         window: dom.window,
-        onFileDoubleClick: (path) => {
+        onFileOpen: (path) => {
           opened = path;
         }
       });
