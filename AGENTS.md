@@ -13,3 +13,8 @@ Tests are broken down into 3 categories:
 - unit: tests for individual functions and components
 - e2e: end-to-end tests for the entire app, simulating user interactions, but mocking external dependencies
 - integration: tests that test the app with real external dependencies, such as the LLM API
+
+## Commits
+
+- Include a Co-authored-by trailer for the model on every commit.
+- Use a short subject line plus a more detailed body message.
