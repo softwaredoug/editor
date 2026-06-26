@@ -6,7 +6,11 @@ async function run() {
     const result = await listTextFiles(workerData ?? {});
     parentPort.postMessage(result);
   } catch (error) {
-    parentPort.postMessage({ files: [], error: error?.message || "Failed to list files." });
+    parentPort.postMessage({
+      files: [],
+      tooMany: false,
+      error: error?.message || "Failed to list files."
+    });
   }
 }
 

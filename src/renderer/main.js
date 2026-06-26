@@ -4,6 +4,7 @@ import { CorrectionsService } from "./services/corrections-service.js";
 import { EditorComponent } from "./components/editor-component.js";
 import { IssuesSidebar } from "./components/issues-sidebar.js";
 import { DirectorySelector } from "./components/directory-selector.js";
+import { FileList } from "./components/file-list.js";
 import { CommitModal } from "./modals/commit-modal.js";
 import { RepoModal } from "./modals/repo-modal.js";
 import { RenameModal } from "./modals/rename-modal.js";
@@ -36,13 +37,13 @@ const repoStatusLabel = document.getElementById("repo-status-label");
 
 let activeFilePath = null;
 let activeDirectory = null;
-let filesInDirectory = [];
 let repoStatus = null;
 let activeGlobPattern = null;
 
 let editorComponent;
 let issuesSidebar;
 let directorySelector;
+let fileList;
 
 const editor = createEditor({
   parent: document.getElementById("editor"),
@@ -60,6 +61,12 @@ issuesSidebar = new IssuesSidebar({
       editor.scrollTo(issue.range.start, issue.range.end);
     }
   },
+  onStatus: (message) => setStatus(message)
+});
+
+fileList = new FileList({
+  mountEl: filesList,
+  onFileDoubleClick: (path) => handleFileDoubleClick(path),
   onStatus: (message) => setStatus(message)
 });
 
@@ -175,7 +182,7 @@ function setActiveFilePath(path) {
   activeFileLabel.textContent = path
     ? path.split("/").pop()
     : "No file selected";
-  highlightActiveFile();
+  fileList.setActiveFilePath(path);
 }
 
 function offsetIssues(issues, offset) {
@@ -224,46 +231,9 @@ async function refreshRepoStatus() {
 
 
 
-function renderFileList() {
-  filesList.innerHTML = "";
-
-  if (!filesInDirectory.length) {
-    const empty = document.createElement("div");
-    empty.className = "files-empty";
-    empty.textContent = activeDirectory
-      ? "No markdown files found"
-      : "Select a folder to begin";
-    filesList.appendChild(empty);
-    return;
-  }
-
-  filesInDirectory.forEach((file) => {
-    const item = document.createElement("div");
-    item.className = "file-item";
-    item.textContent = file.relativePath;
-    item.dataset.path = file.path;
-    item.addEventListener("dblclick", () => handleFileDoubleClick(file.path));
-    filesList.appendChild(item);
-  });
-
-  highlightActiveFile();
-}
-
-function highlightActiveFile() {
-  const items = Array.from(filesList.querySelectorAll(".file-item"));
-  items.forEach((item) => {
-    if (item.dataset.path === activeFilePath) {
-      item.classList.add("active");
-    } else {
-      item.classList.remove("active");
-    }
-  });
-}
-
 async function refreshFileList() {
   if (!activeDirectory) {
-    filesInDirectory = [];
-    renderFileList();
+    fileList.setFiles({ files: [], activeDirectory: null });
     setRepoStatus(null);
     await editorComponent.setActiveDirectory(null);
     return;
@@ -272,8 +242,11 @@ async function refreshFileList() {
     directory: activeDirectory,
     pattern: activeGlobPattern
   });
-  filesInDirectory = result?.files ?? [];
-  renderFileList();
+  fileList.setFiles({
+    files: result?.files ?? [],
+    activeDirectory,
+    tooMany: result?.tooMany
+  });
   await refreshRepoStatus();
   logStartup("File list refreshed");
 }

@@ -5,10 +5,11 @@ import { promisify } from "util";
 import fg from "fast-glob";
 
 const execFileAsync = promisify(execFile);
+const DEFAULT_FILE_LIST_LIMIT = 1000;
 
-export async function listTextFiles({ directory, pattern } = {}) {
+export async function listTextFiles({ directory, pattern, limit = DEFAULT_FILE_LIST_LIMIT } = {}) {
   if (!directory) {
-    return { files: [] };
+    return { files: [], tooMany: false };
   }
 
   const rootDir = directory;
@@ -114,7 +115,10 @@ export async function listTextFiles({ directory, pattern } = {}) {
   }
 
   files.sort((a, b) => a.relativePath.localeCompare(b.relativePath));
-  return { files };
+  const maxFiles = Number.isFinite(limit) ? Math.max(0, limit) : DEFAULT_FILE_LIST_LIMIT;
+  const tooMany = files.length > maxFiles;
+  const trimmedFiles = tooMany ? files.slice(0, maxFiles) : files;
+  return { files: trimmedFiles, tooMany };
 }
 
 export async function readFile(filePath) {

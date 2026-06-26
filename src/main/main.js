@@ -316,13 +316,13 @@ async function listTextFilesInWorker(payload) {
     });
 
     worker.once("error", (error) => {
-      resolve({ files: [], error: error?.message || "Failed to list files." });
+      resolve({ files: [], tooMany: false, error: error?.message || "Failed to list files." });
       worker.terminate();
     });
 
     worker.once("exit", (code) => {
       if (code !== 0) {
-        resolve({ files: [], error: `Worker exited with code ${code}` });
+        resolve({ files: [], tooMany: false, error: `Worker exited with code ${code}` });
       }
     });
   });

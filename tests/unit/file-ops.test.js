@@ -77,6 +77,20 @@ describe("file operations with git", () => {
         assert.deepEqual(names, ["a.md", "nested/n.md"]);
       });
     });
+
+    it("truncates file list to the limit and flags too many", async () => {
+      await withTempRepo(async (tmpDir) => {
+        await writeFile(path.join(tmpDir, "a.md"), "", "utf8");
+        await writeFile(path.join(tmpDir, "b.md"), "", "utf8");
+        await writeFile(path.join(tmpDir, "c.md"), "", "utf8");
+
+        const result = await listTextFiles({ directory: tmpDir, limit: 2 });
+        const names = result.files.map((file) => file.relativePath).sort();
+
+        assert.equal(result.tooMany, true);
+        assert.deepEqual(names, ["a.md", "b.md"]);
+      });
+    });
   });
 
   describe("create scenarios", () => {
