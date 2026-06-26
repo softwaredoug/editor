@@ -6,3 +6,8 @@ repos:
         entry: node --test tests/unit/*.test.js
         language: system
         pass_filenames: false
+      - id: e2e-tests
+        name: e2e tests
+        entry: node --test tests/e2e/*.test.js
+        language: system
+        pass_filenames: false
