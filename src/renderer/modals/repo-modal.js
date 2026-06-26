@@ -1,6 +1,6 @@
 import { BaseModal } from "./base-modal.js";
 
-export class RepoModal extends BaseModal {
+export class RepoModal {
   constructor({
     mountEl,
     window,
@@ -9,11 +9,12 @@ export class RepoModal extends BaseModal {
     setRepoStatus,
     getActiveDirectory
   }) {
-    super({
+    this.base = new BaseModal({
       mountEl,
       window,
       templateUrl: new URL("./repo-modal.html?raw", import.meta.url)
     });
+    this.window = window;
     this.fileService = fileService;
     this.getRepoStatus = getRepoStatus;
     this.setRepoStatus = setRepoStatus;
@@ -23,33 +24,48 @@ export class RepoModal extends BaseModal {
     this.errorLabel = null;
     this.closeButton = null;
     this.syncButton = null;
-  }
-
-  bindEvents() {
-    super.bindEvents();
-    this.statusSummary = this.query("#repo-status-summary");
-    this.statusDetails = this.query("#repo-status-details");
-    this.errorLabel = this.query("#repo-status-error");
-    this.closeButton = this.query("#repo-close");
-    this.syncButton = this.query("#repo-sync");
-
-    this.closeButton.addEventListener("click", () => this.close());
-    this.syncButton.addEventListener("click", () => this.handleSync());
+    this._bound = false;
   }
 
   async open() {
-    await super.open();
+    await this.ensureReady();
+    await this.base.open();
     this.renderStatus(this.getRepoStatus());
   }
 
   close() {
-    super.close();
+    this.base.close();
     this.setError("");
   }
 
   setStatus({ summary, details }) {
     this.statusSummary.textContent = summary ?? "";
     this.statusDetails.textContent = details ?? "";
+  }
+
+  isOpen() {
+    return this.base.isOpen();
+  }
+
+  isReady() {
+    return this.base.isReady();
+  }
+
+  async ensureReady() {
+    if (this._bound) {
+      return;
+    }
+    await this.base.ensureReady();
+    this.statusSummary = this.base.query("#repo-status-summary");
+    this.statusDetails = this.base.query("#repo-status-details");
+    this.errorLabel = this.base.query("#repo-status-error");
+    this.closeButton = this.base.query("#repo-close");
+    this.syncButton = this.base.query("#repo-sync");
+
+    this.closeButton.addEventListener("click", () => this.close());
+    this.syncButton.addEventListener("click", () => this.handleSync());
+
+    this._bound = true;
   }
 
   setError(message) {

@@ -1,12 +1,13 @@
 import { BaseModal } from "./base-modal.js";
 
-export class RenameModal extends BaseModal {
+export class RenameModal {
   constructor({ mountEl, window, fileService, buildSummary, onConfirm, onDelete }) {
-    super({
+    this.base = new BaseModal({
       mountEl,
       window,
       templateUrl: new URL("./rename-modal.html?raw", import.meta.url)
     });
+    this.window = window;
     this.fileService = fileService;
     this.buildSummary = buildSummary;
     this.onConfirm = onConfirm;
@@ -22,18 +23,51 @@ export class RenameModal extends BaseModal {
     this.targetPath = null;
     this.requiresCommit = false;
     this.summaryAuto = false;
+    this._bound = false;
   }
 
-  bindEvents() {
-    super.bindEvents();
-    this.nameInput = this.query("#rename-input");
-    this.gitFields = this.query("#rename-git-fields");
-    this.summaryInput = this.query("#rename-summary");
-    this.detailsInput = this.query("#rename-details");
-    this.errorLabel = this.query("#rename-error");
-    this.cancelButton = this.query("#rename-cancel");
-    this.confirmButton = this.query("#rename-confirm");
-    this.deleteButton = this.query("#rename-delete");
+  async open({ path, requiresCommit }) {
+    await this.ensureReady();
+    await this.base.open();
+    this.targetPath = path;
+    this.requiresCommit = Boolean(requiresCommit);
+    this.gitFields.classList.toggle("hidden", !this.requiresCommit);
+    this.nameInput.value = path?.split("/").pop() ?? "";
+    this.summaryInput.value = this.requiresCommit
+      ? this.buildSummary(path, this.nameInput.value)
+      : "";
+    this.summaryAuto = this.requiresCommit;
+    this.detailsInput.value = "";
+    this.setError("");
+    this.nameInput.focus();
+    this.nameInput.select();
+  }
+
+  close() {
+    this.base.close();
+    this.targetPath = null;
+    this.requiresCommit = false;
+    this.summaryAuto = false;
+    this.setError("");
+  }
+
+  isOpen() {
+    return this.base.isOpen();
+  }
+
+  async ensureReady() {
+    if (this._bound) {
+      return;
+    }
+    await this.base.ensureReady();
+    this.nameInput = this.base.query("#rename-input");
+    this.gitFields = this.base.query("#rename-git-fields");
+    this.summaryInput = this.base.query("#rename-summary");
+    this.detailsInput = this.base.query("#rename-details");
+    this.errorLabel = this.base.query("#rename-error");
+    this.cancelButton = this.base.query("#rename-cancel");
+    this.confirmButton = this.base.query("#rename-confirm");
+    this.deleteButton = this.base.query("#rename-delete");
 
     this.cancelButton.addEventListener("click", () => this.close());
     this.confirmButton.addEventListener("click", () => this.handleConfirm());
@@ -53,30 +87,8 @@ export class RenameModal extends BaseModal {
       }
       this.summaryAuto = false;
     });
-  }
 
-  async open({ path, requiresCommit }) {
-    await super.open();
-    this.targetPath = path;
-    this.requiresCommit = Boolean(requiresCommit);
-    this.gitFields.classList.toggle("hidden", !this.requiresCommit);
-    this.nameInput.value = path?.split("/").pop() ?? "";
-    this.summaryInput.value = this.requiresCommit
-      ? this.buildSummary(path, this.nameInput.value)
-      : "";
-    this.summaryAuto = this.requiresCommit;
-    this.detailsInput.value = "";
-    this.setError("");
-    this.nameInput.focus();
-    this.nameInput.select();
-  }
-
-  close() {
-    super.close();
-    this.targetPath = null;
-    this.requiresCommit = false;
-    this.summaryAuto = false;
-    this.setError("");
+    this._bound = true;
   }
 
   setError(message) {

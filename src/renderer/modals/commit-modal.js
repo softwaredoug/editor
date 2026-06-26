@@ -1,6 +1,6 @@
 import { BaseModal } from "./base-modal.js";
 
-export class CommitModal extends BaseModal {
+export class CommitModal {
   constructor({
     mountEl,
     window,
@@ -10,11 +10,12 @@ export class CommitModal extends BaseModal {
     setStatus,
     refreshRepoStatus
   }) {
-    super({
+    this.base = new BaseModal({
       mountEl,
       window,
       templateUrl: new URL("./commit-modal.html?raw", import.meta.url)
     });
+    this.window = window;
     this.fileService = fileService;
     this.getFilePath = getFilePath;
     this.getEditorText = getEditorText;
@@ -25,15 +26,39 @@ export class CommitModal extends BaseModal {
     this.errorLabel = null;
     this.cancelButton = null;
     this.confirmButton = null;
+    this._bound = false;
   }
 
-  bindEvents() {
-    super.bindEvents();
-    this.summaryInput = this.query("#commit-summary");
-    this.detailsInput = this.query("#commit-details");
-    this.errorLabel = this.query("#commit-error");
-    this.cancelButton = this.query("#commit-cancel");
-    this.confirmButton = this.query("#commit-confirm");
+  async open() {
+    await this.ensureReady();
+    await this.base.open();
+    this.setError("");
+    this.summaryInput.focus();
+  }
+
+  close() {
+    this.base.close();
+    this.setError("");
+  }
+
+  setError(message) {
+    this.errorLabel.textContent = message ?? "";
+  }
+
+  isOpen() {
+    return this.base.isOpen();
+  }
+
+  async ensureReady() {
+    if (this._bound) {
+      return;
+    }
+    await this.base.ensureReady();
+    this.summaryInput = this.base.query("#commit-summary");
+    this.detailsInput = this.base.query("#commit-details");
+    this.errorLabel = this.base.query("#commit-error");
+    this.cancelButton = this.base.query("#commit-cancel");
+    this.confirmButton = this.base.query("#commit-confirm");
 
     this.cancelButton.addEventListener("click", () => this.close());
     this.confirmButton.addEventListener("click", () => this.handleConfirm());
@@ -46,21 +71,8 @@ export class CommitModal extends BaseModal {
         this.confirm();
       }
     });
-  }
 
-  async open() {
-    await super.open();
-    this.setError("");
-    this.summaryInput.focus();
-  }
-
-  close() {
-    super.close();
-    this.setError("");
-  }
-
-  setError(message) {
-    this.errorLabel.textContent = message ?? "";
+    this._bound = true;
   }
 
   async handleConfirm() {

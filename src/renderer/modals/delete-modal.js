@@ -1,8 +1,8 @@
 import { BaseModal } from "./base-modal.js";
 
-export class DeleteModal extends BaseModal {
+export class DeleteModal {
   constructor({ mountEl, window, onConfirm }) {
-    super({
+    this.base = new BaseModal({
       mountEl,
       window,
       templateUrl: new URL("./delete-modal.html?raw", import.meta.url)
@@ -18,30 +18,12 @@ export class DeleteModal extends BaseModal {
     this.targetPath = null;
     this.requiresCommit = false;
     this.summaryAuto = false;
-  }
-
-  bindEvents() {
-    super.bindEvents();
-    this.fileNameLabel = this.query("#delete-file-name");
-    this.gitFields = this.query("#delete-git-fields");
-    this.summaryInput = this.query("#delete-summary");
-    this.detailsInput = this.query("#delete-details");
-    this.errorLabel = this.query("#delete-error");
-    this.cancelButton = this.query("#delete-cancel");
-    this.confirmButton = this.query("#delete-confirm");
-
-    this.cancelButton.addEventListener("click", () => this.close());
-    this.confirmButton.addEventListener("click", () => this.handleConfirm());
-    this.summaryInput.addEventListener("input", () => {
-      if (!this.requiresCommit) {
-        return;
-      }
-      this.summaryAuto = false;
-    });
+    this._bound = false;
   }
 
   async open({ path, requiresCommit, summary }) {
-    await super.open();
+    await this.ensureReady();
+    await this.base.open();
     this.targetPath = path;
     this.requiresCommit = Boolean(requiresCommit);
     this.summaryAuto = this.requiresCommit;
@@ -60,15 +42,44 @@ export class DeleteModal extends BaseModal {
   }
 
   close() {
-    super.close();
+    this.base.close();
     this.targetPath = null;
     this.requiresCommit = false;
     this.summaryAuto = false;
     this.setError("");
   }
 
+  isOpen() {
+    return this.base.isOpen();
+  }
+
   setError(message) {
     this.errorLabel.textContent = message ?? "";
+  }
+
+  async ensureReady() {
+    if (this._bound) {
+      return;
+    }
+    await this.base.ensureReady();
+    this.fileNameLabel = this.base.query("#delete-file-name");
+    this.gitFields = this.base.query("#delete-git-fields");
+    this.summaryInput = this.base.query("#delete-summary");
+    this.detailsInput = this.base.query("#delete-details");
+    this.errorLabel = this.base.query("#delete-error");
+    this.cancelButton = this.base.query("#delete-cancel");
+    this.confirmButton = this.base.query("#delete-confirm");
+
+    this.cancelButton.addEventListener("click", () => this.close());
+    this.confirmButton.addEventListener("click", () => this.handleConfirm());
+    this.summaryInput.addEventListener("input", () => {
+      if (!this.requiresCommit) {
+        return;
+      }
+      this.summaryAuto = false;
+    });
+
+    this._bound = true;
   }
 
   async handleConfirm() {
