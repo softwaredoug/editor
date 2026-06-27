@@ -1,5 +1,7 @@
 function trackCalls(fn) {
   function wrapped(...args) {
+    var fn_name = fn.name || "anonymous";
+    console.log(`Calling function ${fn_name} with arguments:`, args);
     wrapped.calls.push(args);
     return fn(...args);
   }

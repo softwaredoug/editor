@@ -102,8 +102,8 @@ test("AppComponent, file selection", async (t) => {
   });
 })
 
-test("AppComponent (e2e)", async (t) => {
-  const { document } = await setupApp({
+test("AppComponent (e2e) directory list component", async (t) => {
+  const { dom, document, app } = await setupApp({
     fileServiceOverrides: {
       async selectDirectory() {
         return { path: "/tmp/posts" };
@@ -120,11 +120,28 @@ test("AppComponent (e2e)", async (t) => {
     }
   });
 
-  const selectButton = document.querySelector(".select-directory-button");
-  selectButton.click();
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  await t.test("empty if not clicked", async () => {
+    const items = Array.from(document.querySelectorAll(".file-item"));
+    assert.equal(items.length, 0);
+  });
+
+  await t.test("Sends correct directory path", async () => {
+    console.log("Testing directory input");
+    var input = document.querySelector('.active-directory');
+    input.value = "/tmp/foo/bar"
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    // send keydown to input
+    input.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const fileService = app.fileService;
+    assert.equal(fileService.listTextFiles.calls[0][0].directory, "/tmp/foo/bar");
+  });
 
   await t.test("renders file list after selecting a directory", async () => {
+    const selectButton = document.querySelector(".select-directory-button");
+    selectButton.click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
     const items = Array.from(document.querySelectorAll(".file-item"));
     assert.equal(items.length, 2);
     assert.equal(items[0].textContent, "a.md");
