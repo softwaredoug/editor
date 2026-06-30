@@ -1,5 +1,5 @@
 {
-  "name": "editor-llm-feedback",
+  "name": "mudpad",
   "version": "0.1.0",
   "description": "Electron markdown editor with spell, grammar, and LLM feedback",
   "main": "src/main/main.js",
@@ -33,7 +33,7 @@
   },
   "build": {
     "appId": "com.editor.llmfeedback",
-    "productName": "Editor LLM Feedback",
+    "productName": "MudPad",
     "directories": {
       "buildResources": "resources"
     },

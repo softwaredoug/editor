@@ -184,6 +184,7 @@ function createWindow() {
 
 app.whenReady().then(() => {
   logStartup("App ready");
+  app.setName("MudPad");
   startLanguageTool();
   createWindow();
 
