@@ -148,3 +148,27 @@ test("AppComponent (e2e) directory list component", async (t) => {
     assert.equal(items[1].textContent, "b.md");
   });
 });
+
+test("AppComponent (e2e) editor", async (t) => {
+  const { dom, document, app } = await setupApp({
+    fileServiceOverrides: {
+      async selectDirectory() {
+        return { path: "/tmp/posts" };
+      },
+      async listTextFiles() {
+        return {
+          files: [
+            { path: "/tmp/posts/a.md", relativePath: "a.md" },
+            { path: "/tmp/posts/b.md", relativePath: "b.md" }
+          ],
+          tooMany: false
+        };
+      }
+    }
+  });
+
+  await t.test("empty / disabled when opened", async () => {
+    const editorRoot = document.querySelector(".cm-content[contenteditable='false']");
+    assert.ok(editorRoot);
+  })
+});

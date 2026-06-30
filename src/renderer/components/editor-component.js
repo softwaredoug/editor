@@ -24,6 +24,7 @@ export class EditorComponent {
     this.originalText = "";
     this.issues = [];
     this.debounceHandle = null;
+    this.setEditorDisabled(true);
   }
 
   getFilePath() {
@@ -60,6 +61,7 @@ export class EditorComponent {
     this.filePath = result.path;
     this.editor.setText(result.content ?? "");
     this.originalText = result.content ?? "";
+    this.setEditorDisabled(false);
     this.onFileChanged(this.filePath);
     this.scheduleChecks();
     return true;
@@ -69,8 +71,22 @@ export class EditorComponent {
     this.filePath = null;
     this.originalText = "";
     this.editor.setText("");
+    this.setEditorDisabled(true);
     this.updateIssues([]);
     this.onFileChanged(null);
+  }
+
+  setEditorDisabled(isDisabled) {
+    if (!this.editor?.setEditable || !this.editor?.setPlaceholder) {
+      return;
+    }
+    if (isDisabled) {
+      this.editor.setEditable(false);
+      this.editor.setPlaceholder("Select or create a file to begin.");
+    } else {
+      this.editor.setEditable(true);
+      this.editor.setPlaceholder("");
+    }
   }
 
   async saveIfDirty() {

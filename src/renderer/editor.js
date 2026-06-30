@@ -1,5 +1,5 @@
-import { EditorState, StateEffect, StateField } from "@codemirror/state";
-import { EditorView, Decoration, keymap, hoverTooltip } from "@codemirror/view";
+import { EditorState, StateEffect, StateField, Compartment } from "@codemirror/state";
+import { EditorView, Decoration, keymap, hoverTooltip, placeholder } from "@codemirror/view";
 import { markdown } from "@codemirror/lang-markdown";
 import { history, historyKeymap } from "@codemirror/commands";
 
@@ -192,6 +192,8 @@ function createIssuesTooltip({ onApplyIssue, onDismissIssue, onIgnoreIssue } = {
 }
 
 export function createEditor({ parent, initialText, onChange, onApplyIssue, onDismissIssue, onIgnoreIssue }) {
+  const editableCompartment = new Compartment();
+  const placeholderCompartment = new Compartment();
   const state = EditorState.create({
     doc: initialText,
     extensions: [
@@ -208,6 +210,8 @@ export function createEditor({ parent, initialText, onChange, onApplyIssue, onDi
       issuesState,
       hoverSuppressedState,
       createIssuesTooltip({ onApplyIssue, onDismissIssue, onIgnoreIssue }),
+      editableCompartment.of(EditorView.editable.of(true)),
+      placeholderCompartment.of([]),
       EditorView.updateListener.of((update) => {
         if (update.docChanged) {
           onChange(update.state.doc.toString());
@@ -252,6 +256,20 @@ export function createEditor({ parent, initialText, onChange, onApplyIssue, onDi
           issues: issues ?? [],
           docLength: view.state.doc.length
         })
+      });
+    },
+    setEditable: (isEditable) => {
+      view.dispatch({
+        effects: editableCompartment.reconfigure(
+          EditorView.editable.of(Boolean(isEditable))
+        )
+      });
+    },
+    setPlaceholder: (text) => {
+      view.dispatch({
+        effects: placeholderCompartment.reconfigure(
+          text ? placeholder(text) : []
+        )
       });
     }
   };
